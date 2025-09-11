@@ -325,6 +325,26 @@ struct MLBatchSizeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LLMUseBatchSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "llm_use_batch";
+	static constexpr const char *Description = "Whether operator should batch LLM calls for inference";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct LLMUseCacheSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "llm_use_cache";
+	static constexpr const char *Description = "Whether operator should cache LLM calls";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct LLMMaxTokensSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "llm_max_tokens";

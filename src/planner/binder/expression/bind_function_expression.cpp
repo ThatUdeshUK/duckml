@@ -314,6 +314,11 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 	return BindUnsupportedExpression(expr, depth, UnsupportedAggregateMessage());
 }
 
+BindResult ExpressionBinder::BindAggregate(PredictExpression &expr,
+                                           idx_t depth) {
+	return BindUnsupportedExpression(expr, depth, UnsupportedAggregateMessage());
+}
+
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
 	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
 }

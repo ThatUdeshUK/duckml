@@ -1241,6 +1241,7 @@ typedef struct PGPredictExpr {
     PGNode *input_feat;  	/* The input set required by the model */
     PGNode *opt_feat;	 	/* The input set required by the model */
     PGAlias *alias;      	/* table alias & optional column aliases */
+    bool agg;      			/* is semantic aggregate */
     int has_opt;    	 	/* has optional sources */
     int location;        	/* token location, or -1 if unknown */
 } PGPredictExpr;

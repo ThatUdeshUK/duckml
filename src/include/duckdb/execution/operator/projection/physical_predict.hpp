@@ -60,9 +60,13 @@ public:
 
 	int batch_size;
 	int llm_max_tokens; // LLM specific
+	bool use_cache;
+    bool use_batch;
 
 	bool success;
 	std::string error_message;
+
+    std::unordered_map<std::string, std::string> cache;
 
 public:
 	virtual void Config(const ClientConfig &config, const case_insensitive_map_t<Value> &options) {};

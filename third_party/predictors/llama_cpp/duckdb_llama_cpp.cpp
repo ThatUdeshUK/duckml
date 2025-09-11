@@ -12,6 +12,8 @@
 #include <string>
 #include <utility>
 
+#define USE_CACHE 1
+
 namespace duckdb {
 LlamaCppPredictor::LlamaCppPredictor(std::string prompt)
     : Predictor(), prompt(std::move(prompt)) {
@@ -32,6 +34,11 @@ void LlamaCppPredictor::Config(const ClientConfig &client_config, const case_ins
 	this->llm_max_tokens = (options.find("llm_max_tokens") != options.end())
 	                           ? IntegerValue::Get(options.at("llm_max_tokens"))
 	                           : client_config.llm_max_tokens;
+	this->use_cache = (options.find("use_cache") != options.end()) ? BooleanValue::Get(options.at("use_cache"))
+	                                                                 : client_config.llm_use_cache;
+	this->use_batch = (options.find("use_batch") != options.end())
+	                           ? BooleanValue::Get(options.at("use_batch"))
+	                           : client_config.llm_use_batch;
 
 	// Disable llama logging
 	llama_log_set(
@@ -361,15 +368,25 @@ void LlamaCppPredictor::PredictChunk(ClientContext &client, DataChunk &input, Da
 #endif
 
 		for (int i = frow; i < lrow; ++i) {
-			std::string rewritten = prompt_util.embed_prompt(this->prompt, i, input, info);
-			// std::string rewritten = StringUtil::Format("<s>[INST] %s input=\"%s\" [/INST]", this->prompt, input_str);
-
 			std::string llm_out {};
-			llm_out = generate(this->model, this->vocab, this->grmr, this->chain, rewritten, this->n_predict);
+			std::string embeded = prompt_util.embed_prompt(this->prompt, i, input, info);
+#ifdef USE_CACHE
+			if (cache.find(embeded) != cache.end()) {
+				std::cout << "Cache hit!" << std::endl;
+				llm_out = cache[embeded];
+			} else {
+#endif
+				std::string rewritten = this->prompt + ";\n" + embeded;
+				// std::string rewritten = StringUtil::Format("<s>[INST] %s input=\"%s\" [/INST]", this->prompt, input_str);
 
-			llama_sampler_reset(this->grmr);
-			llama_sampler_reset(this->chain);
-			
+				llm_out = generate(this->model, this->vocab, this->grmr, this->chain, rewritten, this->n_predict);
+
+				llama_sampler_reset(this->grmr);
+				llama_sampler_reset(this->chain);
+#ifdef USE_CACHE
+				cache[embeded] = llm_out;
+			}
+#endif
 			std::cout << llm_out << "||" << std::endl;
 			prompt_util.extract_row_data(llm_out, i, output, info);
 		}
@@ -407,7 +424,7 @@ void LlamaCppPredictor::ScanChunk(ClientContext &client, DataChunk &output, cons
 	llama_sampler_reset(this->chain);
 	
 	std::cout << llm_out << "||" << std::endl;
-	prompt_util.extract_array_data(llm_out, output, info);
+	prompt_util.extract_array_data(llm_out, output, 0, info);
 
 #if OPT_TIMING
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();

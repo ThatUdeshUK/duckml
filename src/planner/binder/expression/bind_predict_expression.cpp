@@ -14,6 +14,10 @@ BindResult ExpressionBinder::BindExpression(PredictExpression &predict, idx_t de
 }
 
 BindResult ExpressionBinder::BindPredict(PredictExpression &predict, idx_t depth) {
+	if (predict.agg) {
+		return BindAggregate(predict, depth);
+	}
+
 	// bind the children of the function expression
 	ErrorData error;
 

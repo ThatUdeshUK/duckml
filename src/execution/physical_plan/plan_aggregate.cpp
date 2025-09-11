@@ -11,6 +11,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_predict_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 
@@ -240,12 +241,18 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	plan = ExtractAggregateExpressions(plan, op.expressions, op.groups);
 
 	bool can_use_simple_aggregation = true;
+	bool semantic_agg = false;
 	for (auto &expression : op.expressions) {
-		auto &aggregate = expression->Cast<BoundAggregateExpression>();
-		if (!aggregate.function.simple_update) {
-			// unsupported aggregate for simple aggregation: use hash aggregation
+		if (expression->type == ExpressionType::BOUND_AGGREGATE) {
+			auto &aggregate = expression->Cast<BoundAggregateExpression>();
+			if (!aggregate.function.simple_update) {
+				// unsupported aggregate for simple aggregation: use hash aggregation
+				can_use_simple_aggregation = false;
+				break;
+			}
+		} else if (expression->type == ExpressionType::PREDICT) {
 			can_use_simple_aggregation = false;
-			break;
+			semantic_agg = true;
 		}
 	}
 
@@ -276,7 +283,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 		return group_by;
 	}
 
-	if (CanUsePerfectHashAggregate(context, op, required_bits)) {
+	if (!semantic_agg && CanUsePerfectHashAggregate(context, op, required_bits)) {
 		auto &group_by = Make<PhysicalPerfectHashAggregate>(context, op.types, std::move(op.expressions),
 		                                                    std::move(op.groups), std::move(op.group_stats),
 		                                                    std::move(required_bits), op.estimated_cardinality);
@@ -285,8 +292,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	}
 
 	auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
-	                                             std::move(op.grouping_sets), std::move(op.grouping_functions),
-	                                             op.estimated_cardinality);
+												std::move(op.grouping_sets), std::move(op.grouping_functions),
+												op.estimated_cardinality);
 	group_by.children.push_back(plan);
 	return group_by;
 }
@@ -299,10 +306,12 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 
 	// bind sorted aggregates
 	for (auto &aggr : aggregates) {
-		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		if (bound_aggr.order_bys) {
-			// sorted aggregate!
-			FunctionBinder::BindSortedAggregate(context, bound_aggr, groups);
+		if (aggr->type == ExpressionType::BOUND_AGGREGATE) {
+			auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
+			if (bound_aggr.order_bys) {
+				// sorted aggregate!
+				FunctionBinder::BindSortedAggregate(context, bound_aggr, groups);
+			}
 		}
 	}
 	for (auto &group : groups) {
@@ -312,19 +321,29 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 		group = std::move(ref);
 	}
 	for (auto &aggr : aggregates) {
-		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		for (auto &child : bound_aggr.children) {
-			auto ref = make_uniq<BoundReferenceExpression>(child->return_type, expressions.size());
-			types.push_back(child->return_type);
-			expressions.push_back(std::move(child));
-			child = std::move(ref);
-		}
-		if (bound_aggr.filter) {
-			auto &filter = bound_aggr.filter;
-			auto ref = make_uniq<BoundReferenceExpression>(filter->return_type, expressions.size());
-			types.push_back(filter->return_type);
-			expressions.push_back(std::move(filter));
-			bound_aggr.filter = std::move(ref);
+		if (aggr->type == ExpressionType::BOUND_AGGREGATE) {
+			auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
+			for (auto &child : bound_aggr.children) {
+				auto ref = make_uniq<BoundReferenceExpression>(child->return_type, expressions.size());
+				types.push_back(child->return_type);
+				expressions.push_back(std::move(child));
+				child = std::move(ref);
+			}
+			if (bound_aggr.filter) {
+				auto &filter = bound_aggr.filter;
+				auto ref = make_uniq<BoundReferenceExpression>(filter->return_type, expressions.size());
+				types.push_back(filter->return_type);
+				expressions.push_back(std::move(filter));
+				bound_aggr.filter = std::move(ref);
+			}
+		} else if (aggr->type == ExpressionType::PREDICT) {
+			auto &bound_aggr = aggr->Cast<BoundPredictExpression>();
+			for (auto &child : bound_aggr.children) {
+				auto ref = make_uniq<BoundReferenceExpression>(child->return_type, expressions.size());
+				types.push_back(child->return_type);
+				expressions.push_back(std::move(child));
+				child = std::move(ref);
+			}
 		}
 	}
 	if (expressions.empty()) {

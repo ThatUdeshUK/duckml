@@ -32,7 +32,12 @@ void LlmApiPredictor::Config(const ClientConfig &client_config, const case_insen
 	this->llm_max_tokens = (options.find("llm_max_tokens") != options.end())
 	                           ? IntegerValue::Get(options.at("llm_max_tokens"))
 	                           : client_config.llm_max_tokens;
-
+	this->use_cache = (options.find("use_cache") != options.end()) ? BooleanValue::Get(options.at("use_cache"))
+	                                                                 : client_config.llm_use_cache;
+	this->use_batch = (options.find("use_batch") != options.end())
+	                           ? BooleanValue::Get(options.at("use_batch"))
+	                           : client_config.llm_use_batch;
+	
 	// TODO: Implement any configurations here.
 	this->n_predict = 64;
 }
@@ -106,7 +111,6 @@ void LlmApiPredictor::GenerateGrammar() {
 	std::cout << "Grammer:" << this->grammar << std::endl;
 }
 
-
 std::string LlmApiPredictor::GenerateSystemMessage(bool is_array) const {
 	std::string suffix = R"(. Do not include any extra text, explanations, language specifier, produce {<key>: <single value>} for JSON objects. The JSON must be parsable by a standard parser.)";
 	if (is_array) {
@@ -155,27 +159,68 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 
 		auto &db = DatabaseInstance::GetDatabase(client);
 		auto &api = openai::start(db, base_api, secret);
-		for (int i = frow; i < lrow; ++i) {
-			std::string rewritten = prompt_util.embed_prompt(this->prompt, i, input, info);
 
+		if (use_batch) {
 			std::string llm_out {};
-			nlohmann::json request;
 
+			std::stringstream ss;
+			ss << this->prompt + "; \nRespond with a JSON object for each the following " << num_rows << " inputs:\n[";
+			for (int i = frow; i < lrow; ++i) {
+				ss << "{" << prompt_util.embed_prompt(this->prompt, i, input, info, true) << "},\n";
+			}
+			ss << "]";
+
+			std::string rewritten = ss.str();
+			std::cout << rewritten << std::endl;
+
+			nlohmann::json request;
 			request["model"] = this->model_path;
 			request["messages"] = {
-				{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
+				{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 				{{"content", rewritten}, {"role", "user"}}};
 			// request["max_tokens"] = 64;
 			// request["temperature"] = 0;
-
-			// std::cout << request.dump(2) << std::endl;
 
 			auto completion = api.post("chat/completions", request);
 			for (auto &msg : completion["choices"]) {
 				llm_out = msg["message"]["content"].get<std::string>();
 			}
-			// llm_out = llm_out.substr(1, llm_out.size() - 2);
-			
+			std::cout << llm_out << "||" << std::endl;
+			prompt_util.extract_array_data(llm_out, output, frow, info);
+			continue;
+		}
+
+		for (int i = frow; i < lrow; ++i) {
+			std::string llm_out {};
+
+			std::string embeded = prompt_util.embed_prompt(this->prompt, i, input, info);
+			if (use_cache && cache.find(embeded) != cache.end()) {
+				std::cout << "Cache hit!" << std::endl;
+				llm_out = cache[embeded];
+			} else {
+				std::string rewritten = this->prompt + ";\n" + embeded;
+
+				nlohmann::json request;
+				request["model"] = this->model_path;
+				request["messages"] = {
+					{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
+					{{"content", rewritten}, {"role", "user"}}};
+				// request["max_tokens"] = 64;
+				// request["temperature"] = 0;
+
+				// auto req_ts = std::chrono::steady_clock::now();
+				auto completion = api.post("chat/completions", request);
+				// auto req_te = std::chrono::steady_clock::now();
+				// auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+				// std::cout << "Request time (s):" << req_time << std::endl;
+
+				for (auto &msg : completion["choices"]) {
+					llm_out = msg["message"]["content"].get<std::string>();
+				}
+
+				if (use_cache)
+					cache[embeded] = llm_out;
+			}
 			std::cout << llm_out << "||" << std::endl;
 			prompt_util.extract_row_data(llm_out, i, output, info);
 		}
@@ -215,7 +260,8 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	request["model"] = this->model_path;
 	request["messages"] = {
 		{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
-		{{"content", rewritten}, {"role", "user"}}};
+		{{"content", rewritten}, {"role", "user"}}
+	};
 	// request["max_tokens"] = 64;
 	// request["temperature"] = 0;
 
@@ -228,7 +274,7 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	// llm_out = llm_out.substr(1, llm_out.size() - 2);
 	
 	std::cout << llm_out << "||" << std::endl;
-	prompt_util.extract_array_data(llm_out, output, info);
+	prompt_util.extract_array_data(llm_out, output, 0, info);
 
 #if OPT_TIMING
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();

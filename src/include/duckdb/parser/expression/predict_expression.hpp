@@ -28,6 +28,8 @@ public:
 	string model_name;
 	//! The prompt for llm tasks
 	string prompt;
+	//! Is sem agg
+	bool agg;
 	//! input column names
 	vector<string> input_col_names;
 	//! output column names

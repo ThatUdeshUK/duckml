@@ -31,7 +31,7 @@ bool PredictExpression::Equal(const PredictExpression &a, const PredictExpressio
 			return false;
 		}
 	}
-	if (a.model_name != b.model_name || a.prompt != b.prompt) {
+	if (a.model_name != b.model_name || a.prompt != b.prompt || a.agg != b.agg) {
 		return false;
 	}
 	return true;
@@ -41,6 +41,7 @@ hash_t PredictExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
 	result = CombineHash(result, duckdb::Hash<const char *>(model_name.c_str()));
 	result = CombineHash(result, duckdb::Hash<const char *>(prompt.c_str()));
+	result = CombineHash(result, duckdb::Hash<bool>(agg));
 	return result;
 }
 
@@ -51,6 +52,7 @@ unique_ptr<ParsedExpression> PredictExpression::Copy() const {
 		copy_children.push_back(child->Copy());
 	}
 	auto copy = make_uniq<PredictExpression>(model_name, prompt, std::move(copy_children));
+	copy->agg = agg;
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }

@@ -1334,6 +1334,42 @@ Value MLBatchSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// LLM Use Batch
+//===--------------------------------------------------------------------===//
+void LLMUseBatchSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).llm_use_batch = ClientConfig().llm_use_batch;
+}
+
+void LLMUseBatchSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
+	config.llm_use_batch = parameter;
+}
+
+Value LLMUseBatchSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.llm_use_batch);
+}
+
+//===--------------------------------------------------------------------===//
+// LLM Use Cache
+//===--------------------------------------------------------------------===//
+void LLMUseCacheSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).llm_use_cache = ClientConfig().llm_use_cache;
+}
+
+void LLMUseCacheSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
+	config.llm_use_cache = parameter;
+}
+
+Value LLMUseCacheSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.llm_use_cache);
+}
+
+//===--------------------------------------------------------------------===//
 // LLM Max Tokens Output
 //===--------------------------------------------------------------------===//
 void LLMMaxTokensSetting::ResetLocal(ClientContext &context) {

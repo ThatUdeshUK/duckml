@@ -44,6 +44,8 @@ unique_ptr<ParsedExpression> Transformer::TransformPredict(duckdb_libpgquery::PG
 	if (root.prompt != nullptr)
 		result->prompt = root.prompt;
 
+	result->agg = root.agg;
+
 	static const std::regex out_re(Prompt::OUT_REGEX, std::regex_constants::icase);
 	auto words_begin = std::sregex_iterator(result->prompt.begin(), result->prompt.end(), out_re);
 	auto words_end = std::sregex_iterator();

@@ -43,6 +43,7 @@ protected:
 	                          bool root_expression = false) override;
 
 	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
+	BindResult BindAggregate(PredictExpression &expr, idx_t depth) override;
 
 	bool inside_window;
 	bool bound_aggregate = false;

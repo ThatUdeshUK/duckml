@@ -499,6 +499,11 @@
         "id": 202,
         "name": "children",
         "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 203,
+        "name": "agg",
+        "type": "bool"
       }
     ]
   }

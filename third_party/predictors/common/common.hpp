@@ -12,6 +12,30 @@ namespace duckdb {
 
 class PromptUtil {
 public:
+    std::string extract_json(const std::string &text) {
+        size_t start = text.find_first_of("{[");
+        if (start == std::string::npos) {
+            throw std::runtime_error("No JSON start found");
+        }
+
+        char open = text[start];
+        char close = (open == '{') ? '}' : ']';
+
+        int depth = 0;
+        for (size_t i = start; i < text.size(); i++) {
+            if (text[i] == open) {
+                depth++;
+            } else if (text[i] == close) {
+                depth--;
+                if (depth == 0) {
+                    return text.substr(start, i - start + 1);
+                }
+            }
+        }
+
+        throw std::runtime_error("No matching JSON end found");
+    }
+
     Value extract_longest_integer(const std::string& input) {
         std::regex re("\\d+");
         std::sregex_iterator it(input.begin(), input.end(), re);
@@ -68,33 +92,36 @@ public:
         }
     }
 
-    std::string embed_prompt(const std::string &prompt, int row, DataChunk &input, const PredictInfo &info) {
+    std::string embed_prompt(const std::string &prompt, int row, DataChunk &input, const PredictInfo &info, bool is_multi = false) {
+        std::string line_end = is_multi ? "`, " : "`;\n";
         std::stringstream ss;
-        ss << prompt << ";\n";
         idx_t col_i = 0;
         for (auto mask_i : info.input_mask) {
             ss << info.input_set_names[col_i] << " = `";
+            ss <<  input.GetValue(mask_i, row).ToSQLString() << line_end;
             col_i++;
-            ss <<  input.GetValue(mask_i, row).ToSQLString() << "`;\n";
         }
         return ss.str();
     }
 
-    void extract_array_data(const std::string &llm_out, DataChunk &output, const PredictInfo &info) {
-        auto out_json = nlohmann::json::parse(strip_code_fences(llm_out));
+    void extract_array_data(const std::string &llm_out, DataChunk &output, int i, const PredictInfo &info) {
+        auto out_json = nlohmann::json::parse(extract_json(llm_out));
         if (out_json.is_array()) {
-            output.SetCardinality(out_json.size());
-            idx_t row = 0;
+            output.SetCardinality(output.size() + out_json.size());
+            idx_t row = i;
             for (nlohmann::json::iterator it = out_json.begin(); it != out_json.end(); ++it) {
                 populate_row_data(*it, row, output, info);
                 row++;
             }
+        } else {
+            std::cout << "JSON parse issue: Array not found" << std::endl;
         }
     }
 
     void extract_row_data(const std::string &llm_out, int row, DataChunk &output, const PredictInfo &info) {
         try {
-            auto out_json = nlohmann::json::parse(strip_code_fences(llm_out));
+            auto json_str = extract_json(llm_out);
+            auto out_json = nlohmann::json::parse(json_str);
             populate_row_data(out_json, row, output, info);
         } catch (const nlohmann::json::parse_error& e) {
             std::cout << "JSON parse issue: " << e.what() << std::endl;

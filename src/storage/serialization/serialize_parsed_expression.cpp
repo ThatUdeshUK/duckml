@@ -297,6 +297,7 @@ void PredictExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(200, "model_name", model_name);
 	serializer.WritePropertyWithDefault<string>(201, "prompt", prompt);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", children);
+	serializer.WritePropertyWithDefault<bool>(203, "agg", agg);
 }
 
 unique_ptr<ParsedExpression> PredictExpression::Deserialize(Deserializer &deserializer) {
@@ -304,6 +305,7 @@ unique_ptr<ParsedExpression> PredictExpression::Deserialize(Deserializer &deseri
 	deserializer.ReadPropertyWithDefault<string>(200, "model_name", result->model_name);
 	deserializer.ReadPropertyWithDefault<string>(201, "prompt", result->prompt);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(202, "children", result->children);
+	deserializer.ReadPropertyWithDefault<bool>(203, "agg", result->agg);
 	return std::move(result);
 }
 

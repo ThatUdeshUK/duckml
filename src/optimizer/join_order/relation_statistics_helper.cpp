@@ -33,6 +33,11 @@ static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 		ret.child_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
 		return ret;
 	}
+	case ExpressionClass::PREDICT: {
+		ret.found_expression = true;
+		ret.expression_is_constant = true;
+		return ret;
+	}
 	case ExpressionClass::BOUND_LAMBDA_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_DEFAULT:

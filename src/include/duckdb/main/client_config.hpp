@@ -162,6 +162,10 @@ struct ClientConfig {
 	//! Batch size used by the ML operator for inference
 	idx_t ml_batch_size = 2048;
 
+	bool llm_use_batch = true;
+	idx_t llm_batch_size = 16;
+	bool llm_use_cache = true;
+
 	//! Max fixed token size for the output of the LLM tokenizer
 	idx_t llm_max_tokens = 512;
 

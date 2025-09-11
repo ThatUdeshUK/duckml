@@ -20,23 +20,36 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 
 	filter_count = 0;
 	for (auto &expr : expressions) {
-		D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-		D_ASSERT(expr->IsAggregate());
-		auto &aggr = expr->Cast<BoundAggregateExpression>();
-		bindings.push_back(&aggr);
+		if (expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE) {
+			D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			D_ASSERT(expr->IsAggregate());
+			auto &aggr = expr->Cast<BoundAggregateExpression>();
+			bindings.push_back(&aggr);
 
-		aggregate_return_types.push_back(aggr.return_type);
-		for (auto &child : aggr.children) {
-			payload_types.push_back(child->return_type);
+			aggregate_return_types.push_back(aggr.return_type);
+			for (auto &child : aggr.children) {
+				payload_types.push_back(child->return_type);
+			}
+			if (aggr.filter) {
+				filter_count++;
+				payload_types_filters.push_back(aggr.filter->return_type);
+			}
+			if (!aggr.function.combine) {
+				throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
+			}
+			aggregates.push_back(std::move(expr));
+		// } else if (expr->GetExpressionClass() == ExpressionClass::PREDICT) {
+			// auto &predict = expr->Cast<BoundPredictExpression>();
+			// bindings.push_back(&predict);
+
+			// aggregate_return_types.push_back(predict.return_type);
+			// for (auto &child : predict.children) {
+			// 	payload_types.push_back(child->return_type);
+			// }
+			// aggregates.push_back(std::move(expr));
+		} else {
+			throw InternalException("Unknown aggregate type");
 		}
-		if (aggr.filter) {
-			filter_count++;
-			payload_types_filters.push_back(aggr.filter->return_type);
-		}
-		if (!aggr.function.combine) {
-			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
-		}
-		aggregates.push_back(std::move(expr));
 	}
 	for (const auto &pay_filters : payload_types_filters) {
 		payload_types.push_back(pay_filters);

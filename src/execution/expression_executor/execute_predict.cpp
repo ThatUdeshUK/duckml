@@ -121,24 +121,9 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 
 	pstate.predictor->PredictChunk(*context, input, predictions, count, pstate.predict_info, pstate.stats);
 
-	auto strings = FlatVector::GetData<string_t>(result);
-	auto sel_i = FlatVector::IncrementalSelectionVector();
-	int s = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto oidx = sel_i->get_index(i);
-		auto temp = strings[oidx];
-		s++;
-	}
-	// for (idx_t i = 0; i < count ; i++) {
-	// 	result.SetValue(i, Value(((int) i) % 2));
-	// }
-	// D_ASSERT(expr.function.function);
-	// // #ifdef DEBUG
-	// expr.function.function(arguments, *state, result);
+	Vector empty(result.GetType());
+	predictions.data[0].Reference(empty);
 
-	predictions.data[0].Reference(nullptr);
-
-	result.Verify(count);
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);
 }
