@@ -495,8 +495,8 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 			bindings.insert(relation_mapping[colref.binding.table_index]);
 		}
 	}
-	if (expression.GetExpressionType() == ExpressionType::BOUND_REF) {
-		// bound expression
+	if (expression.GetExpressionType() == ExpressionType::BOUND_REF || expression.GetExpressionType() == ExpressionType::PREDICT) {
+		// bound or predict expression
 		bindings.clear();
 		return false;
 	}

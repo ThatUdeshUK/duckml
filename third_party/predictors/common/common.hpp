@@ -98,16 +98,19 @@ public:
         idx_t col_i = 0;
         for (auto mask_i : info.input_mask) {
             ss << info.input_set_names[col_i] << " = `";
-            ss <<  input.GetValue(mask_i, row).ToSQLString() << line_end;
+            ss <<  input.GetValue(mask_i, row).ToSQLString();
+            if (col_i <= info.input_mask.size())
+                ss << line_end;
             col_i++;
         }
         return ss.str();
     }
 
-    void extract_array_data(const std::string &llm_out, DataChunk &output, int i, const PredictInfo &info) {
+    void extract_array_data(const std::string &llm_out, DataChunk &output, int i, const PredictInfo &info, bool resize = false) {
         auto out_json = nlohmann::json::parse(extract_json(llm_out));
         if (out_json.is_array()) {
-            output.SetCardinality(output.size() + out_json.size());
+            if (resize)
+                output.SetCardinality(out_json.size());
             idx_t row = i;
             for (nlohmann::json::iterator it = out_json.begin(); it != out_json.end(); ++it) {
                 populate_row_data(*it, row, output, info);

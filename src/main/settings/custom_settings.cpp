@@ -1370,6 +1370,24 @@ Value LLMUseCacheSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Pull Predict Filter
+//===--------------------------------------------------------------------===//
+void PullPredictFilterSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).pull_predict_filter = ClientConfig().pull_predict_filter;
+}
+
+void PullPredictFilterSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
+	config.pull_predict_filter = parameter;
+}
+
+Value PullPredictFilterSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.pull_predict_filter);
+}
+
+//===--------------------------------------------------------------------===//
 // LLM Max Tokens Output
 //===--------------------------------------------------------------------===//
 void LLMMaxTokensSetting::ResetLocal(ClientContext &context) {

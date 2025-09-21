@@ -21,10 +21,11 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PREDICT;
 
 public:
-	LogicalPredict(idx_t predict_idx, BoundPredictInfo info);
+	LogicalPredict();
+	LogicalPredict(idx_t predict_idx, unique_ptr<BoundPredictInfo> info);
 
 	idx_t predict_index;
-	BoundPredictInfo bound_predict;
+	unique_ptr<BoundPredictInfo> bound_predict;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
@@ -36,8 +37,5 @@ public:
 
 protected:
 	void ResolveTypes() override;
-
-private:
-	LogicalPredict();
 };
 } // namespace duckdb

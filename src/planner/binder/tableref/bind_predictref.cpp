@@ -18,38 +18,39 @@ struct BindModelData {
 
 unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	auto result = make_uniq<BoundPredictRef>();
-	result->bound_predict.model_name = std::move(ref.model_name);
+	auto bound_predict = make_uniq<BoundPredictInfo>();
+	bound_predict->model_name = std::move(ref.model_name);
 	
-	result->bound_predict.prompt = std::move(ref.prompt);
+	bound_predict->prompt = std::move(ref.prompt);
 
 	auto models = make_uniq<BindModelData>();
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::MODEL_ENTRY, [&](CatalogEntry &entry) {
 			auto &item = entry.Cast<ModelCatalogEntry>();
-			if (item.name == result->bound_predict.model_name) {
+			if (item.name == bound_predict->model_name) {
 				models->entries.push_back(item);
 			}
 		});
 	};
 
 	if (models->entries.empty()) {
-		throw InternalException("Catalog Error: Model with name `" + result->bound_predict.model_name +
+		throw InternalException("Catalog Error: Model with name `" + bound_predict->model_name +
 		                        "` does not exist!");
 	}
 
 	auto &stored_model = models->entries[0].get();
 	auto stored_model_data = stored_model.GetData();
-	result->bound_predict.model_type = stored_model_data.model_type;
-	result->bound_predict.model_path = stored_model_data.model_path;
-	result->bound_predict.options = stored_model_data.options;
+	bound_predict->model_type = stored_model_data.model_type;
+	bound_predict->model_path = stored_model_data.model_path;
+	bound_predict->options = stored_model_data.options;
 	if (stored_model_data.on_prompt) {
-		result->bound_predict.base_api = stored_model_data.base_api;
-		result->bound_predict.secret = stored_model_data.secret;
+		bound_predict->base_api = stored_model_data.base_api;
+		bound_predict->secret = stored_model_data.secret;
 
 		// Infer input output columns from the PROMPT
 		static const std::regex out_re(Prompt::OUT_REGEX, std::regex_constants::icase);
-		auto words_begin = std::sregex_iterator(result->bound_predict.prompt.begin(), result->bound_predict.prompt.end(), out_re);
+		auto words_begin = std::sregex_iterator(bound_predict->prompt.begin(), bound_predict->prompt.end(), out_re);
 		auto words_end = std::sregex_iterator();
 
 		for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
@@ -62,7 +63,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 		}
 
 		static const std::regex in_re(R"(\{\{[A-Za-z_][A-Za-z0-9_]*\}\})");
-		words_begin = std::sregex_iterator(result->bound_predict.prompt.begin(), result->bound_predict.prompt.end(), in_re);
+		words_begin = std::sregex_iterator(bound_predict->prompt.begin(), bound_predict->prompt.end(), in_re);
 		words_end = std::sregex_iterator();
 
 		for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
@@ -121,9 +122,9 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 				input_mask.push_back(i);
 			}
 		}
-		result->bound_predict.input_mask = std::move(input_mask);
+		bound_predict->input_mask = std::move(input_mask);
 
-		if (result->bound_predict.model_type == ModelType::GNN) {
+		if (bound_predict->model_type == ModelType::GNN) {
 			vector<string> opt_names;
 			vector<LogicalType> opt_types;
 			result->opt_binder = Binder::CreateBinder(context, this);
@@ -167,7 +168,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 					opt_mask.push_back(i);
 				}
 			}
-			result->bound_predict.opt_mask = std::move(opt_mask);
+			bound_predict->opt_mask = std::move(opt_mask);
 		}
 	}
 
@@ -180,13 +181,14 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	             std::make_move_iterator(result_types.end()));
 
 	if (ref.source) {
-		result->bound_predict.input_set_names = std::move(stored_model_data.input_set_names);
-		result->bound_predict.input_set_types = std::move(input_types);
+		bound_predict->input_set_names = std::move(stored_model_data.input_set_names);
+		bound_predict->input_set_types = std::move(input_types);
 	}
-	result->bound_predict.types = types;
-	result->bound_predict.result_set_names = std::move(stored_model_data.out_names);
-	result->bound_predict.result_set_types = std::move(stored_model_data.out_types);
+	bound_predict->types = types;
+	bound_predict->result_set_names = std::move(stored_model_data.out_names);
+	bound_predict->result_set_types = std::move(stored_model_data.out_types);
 
+	result->bound_predict = std::move(bound_predict);
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_predict" : ref.alias;
 	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
 	

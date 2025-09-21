@@ -43,7 +43,7 @@ struct BoundPredictInfo {
 	case_insensitive_map_t<Value> options;
 
 	void Serialize(Serializer &serializer) const;
-	static BoundPredictInfo Deserialize(Deserializer &deserializer);
+	static unique_ptr<BoundPredictInfo> Deserialize(Deserializer &deserializer);
 };
 
 class BoundPredictRef : public BoundTableRef {
@@ -62,6 +62,6 @@ public:
 	//! The child node of the Predict
 	vector<unique_ptr<BoundTableRef>> children;
 	//! The bound predict info
-	BoundPredictInfo bound_predict;
+	unique_ptr<BoundPredictInfo> bound_predict;
 };
 } // namespace duckdb

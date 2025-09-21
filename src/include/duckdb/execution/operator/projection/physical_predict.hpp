@@ -91,7 +91,7 @@ public:
 //! PhysicalPredict implements the operator physical PREDICT operation
 class PhysicalPredict : public PhysicalOperator {
 public:
-	PhysicalPredict(vector<LogicalType> types, PhysicalOperator &child, BoundPredictInfo bound_predict_p);
+	PhysicalPredict(vector<LogicalType> types, PhysicalOperator &child, unique_ptr<BoundPredictInfo> bound_predict_p);
 
 	PredictInfo predict_info;
 
@@ -115,7 +115,7 @@ public:
 //! PhysicalPredict implements the operator physical PREDICT operation
 class PhysicalPredictScan : public PhysicalOperator {
 public:
-	PhysicalPredictScan(vector<LogicalType> types, BoundPredictInfo bound_predict_p);
+	PhysicalPredictScan(vector<LogicalType> types, unique_ptr<BoundPredictInfo> bound_predict_p);
 
 	PredictInfo predict_info;
 

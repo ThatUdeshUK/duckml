@@ -139,6 +139,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	if (rows % batch_size != 0)
 		rounds++;
 
+	int tokens = 0;
 	for (size_t batch = 0; batch < rounds; batch++) {
 #if OPT_TIMING
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -181,7 +182,14 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			// request["max_tokens"] = 64;
 			// request["temperature"] = 0;
 
+
+			auto req_ts = std::chrono::steady_clock::now();
 			auto completion = api.post("chat/completions", request);
+			auto req_te = std::chrono::steady_clock::now();
+			auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+			std::cout << "Batch request time (s):" << req_time << std::endl;
+			tokens += completion["usage"]["total_tokens"].get<int>();
+
 			for (auto &msg : completion["choices"]) {
 				llm_out = msg["message"]["content"].get<std::string>();
 			}
@@ -194,9 +202,9 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			std::string llm_out {};
 
 			std::string embeded = prompt_util.embed_prompt(this->prompt, i, input, info);
-			if (use_cache && cache.find(embeded) != cache.end()) {
+			if (use_cache && this->cache.find(embeded) != this->cache.end()) {
 				std::cout << "Cache hit!" << std::endl;
-				llm_out = cache[embeded];
+				llm_out = this->cache[embeded];
 			} else {
 				std::string rewritten = this->prompt + ";\n" + embeded;
 
@@ -208,18 +216,20 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 				// request["max_tokens"] = 64;
 				// request["temperature"] = 0;
 
-				// auto req_ts = std::chrono::steady_clock::now();
+				auto req_ts = std::chrono::steady_clock::now();
 				auto completion = api.post("chat/completions", request);
-				// auto req_te = std::chrono::steady_clock::now();
-				// auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
-				// std::cout << "Request time (s):" << req_time << std::endl;
+				auto req_te = std::chrono::steady_clock::now();
+				auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+				std::cout << "Request time (s):" << req_time << std::endl;
+				tokens += completion["usage"]["total_tokens"].get<int>();
 
 				for (auto &msg : completion["choices"]) {
 					llm_out = msg["message"]["content"].get<std::string>();
 				}
 
+				std::string cache_out = llm_out;
 				if (use_cache)
-					cache[embeded] = llm_out;
+					this->cache[embeded] = std::move(cache_out);
 			}
 			std::cout << llm_out << "||" << std::endl;
 			prompt_util.extract_row_data(llm_out, i, output, info);
@@ -236,11 +246,11 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		end = std::chrono::steady_clock::now();
 		stats->move_rev += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 #endif
-
 		// TODO: Calculate the accuracy metric here for the prediction and update the stats.correct and stats.total
 		// stats->correct += <no_of_positives>;
 		// stats->total += rows;
 	}
+	std::cout << "total tokens: " << tokens << std::endl;
 }
 
 void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const PredictInfo &info, unique_ptr<PredictStats> &stats) {
@@ -272,9 +282,11 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 		llm_out = msg["message"]["content"].get<std::string>();
 	}
 	// llm_out = llm_out.substr(1, llm_out.size() - 2);
+
+	int tokens = completion["usage"]["total_tokens"].get<int>();
+	std::cout << llm_out << "||" << " tokens: " << tokens << std::endl;
 	
-	std::cout << llm_out << "||" << std::endl;
-	prompt_util.extract_array_data(llm_out, output, 0, info);
+	prompt_util.extract_array_data(llm_out, output, 0, info, true);
 
 #if OPT_TIMING
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();

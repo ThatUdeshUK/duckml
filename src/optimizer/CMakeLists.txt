@@ -22,6 +22,7 @@ add_library_unity(
   expression_rewriter.cpp
   filter_combiner.cpp
   filter_pullup.cpp
+  predict_pullup.cpp
   filter_pushdown.cpp
   in_clause_rewriter.cpp
   join_filter_pushdown_optimizer.cpp

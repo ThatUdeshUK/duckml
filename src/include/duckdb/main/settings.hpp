@@ -345,6 +345,16 @@ struct LLMUseCacheSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct PullPredictFilterSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "pull_predict_filter";
+	static constexpr const char *Description = "Whether the optimizer should not push predict filters";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct LLMMaxTokensSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "llm_max_tokens";

@@ -15,6 +15,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
     return {
         MetricsType::OPTIMIZER_EXPRESSION_REWRITER,
         MetricsType::OPTIMIZER_FILTER_PULLUP,
+        MetricsType::OPTIMIZER_PREDICT_PULLUP,
         MetricsType::OPTIMIZER_FILTER_PUSHDOWN,
         MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP,
         MetricsType::OPTIMIZER_CTE_FILTER_PUSHER,
@@ -62,6 +63,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_EXPRESSION_REWRITER;
         case OptimizerType::FILTER_PULLUP:
             return MetricsType::OPTIMIZER_FILTER_PULLUP;
+        case OptimizerType::PREDICT_PULLUP:
+            return MetricsType::OPTIMIZER_PREDICT_PULLUP;
         case OptimizerType::FILTER_PUSHDOWN:
             return MetricsType::OPTIMIZER_FILTER_PUSHDOWN;
         case OptimizerType::EMPTY_RESULT_PULLUP:
@@ -123,6 +126,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::EXPRESSION_REWRITER;
         case MetricsType::OPTIMIZER_FILTER_PULLUP:
             return OptimizerType::FILTER_PULLUP;
+        case MetricsType::OPTIMIZER_PREDICT_PULLUP:
+            return OptimizerType::PREDICT_PULLUP;
         case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
             return OptimizerType::FILTER_PUSHDOWN;
         case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
@@ -182,6 +187,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
     switch(type) {
         case MetricsType::OPTIMIZER_EXPRESSION_REWRITER:
         case MetricsType::OPTIMIZER_FILTER_PULLUP:
+        case MetricsType::OPTIMIZER_PREDICT_PULLUP:
         case MetricsType::OPTIMIZER_FILTER_PUSHDOWN:
         case MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP:
         case MetricsType::OPTIMIZER_CTE_FILTER_PUSHER:

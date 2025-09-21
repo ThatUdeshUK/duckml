@@ -95,4 +95,24 @@ unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOpe
 	return op;
 }
 
+unique_ptr<LogicalOperator> PredictPullup::PullupProjection(unique_ptr<LogicalOperator> op) {
+	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
+	op->children[0] = Rewrite(std::move(op->children[0]));
+	// if (!filters_expr_pullup.empty()) {
+	// 	auto &proj = op->Cast<LogicalProjection>();
+	// 	// INTERSECT, EXCEPT, and DISTINCT
+	// 	if (!can_add_column) {
+	// 		// special treatment for operators that cannot add columns, e.g., INTERSECT, EXCEPT, and DISTINCT
+	// 		ProjectSetOperation(proj);
+	// 		return op;
+	// 	}
+
+	// 	for (idx_t i = 0; i < filters_expr_pullup.size(); ++i) {
+	// 		auto &expr = (Expression &)*filters_expr_pullup[i];
+	// 		ReplaceExpressionBinding(proj.expressions, expr, proj.table_index);
+	// 	}
+	// }
+	return op;
+}
+
 } // namespace duckdb

@@ -166,6 +166,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(MLBatchSizeSetting),
     DUCKDB_LOCAL(LLMUseBatchSetting),
     DUCKDB_LOCAL(LLMUseCacheSetting),
+    DUCKDB_LOCAL(PullPredictFilterSetting),
     DUCKDB_LOCAL(LLMMaxTokensSetting),
     DUCKDB_LOCAL(ONNXExecutionModeSetting),
     DUCKDB_LOCAL(ONNXIntraTCSetting),

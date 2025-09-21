@@ -46,20 +46,20 @@ public:
 	}
 };
 
-PhysicalPredict::PhysicalPredict(vector<LogicalType> types_p, PhysicalOperator &child, BoundPredictInfo bound_predict_p)
+PhysicalPredict::PhysicalPredict(vector<LogicalType> types_p, PhysicalOperator &child, unique_ptr<BoundPredictInfo> bound_predict_p)
     : PhysicalOperator(PhysicalOperatorType::PREDICT, std::move(types_p), child.estimated_cardinality) {
 	children.push_back(child);
 
-	predict_info.model_type = bound_predict_p.model_type;
-	predict_info.model_path = std::move(bound_predict_p.model_path);
-	predict_info.prompt = std::move(bound_predict_p.prompt);
-	predict_info.base_api = std::move(bound_predict_p.base_api);
-	predict_info.secret = std::move(bound_predict_p.secret);
-	predict_info.input_mask = std::move(bound_predict_p.input_mask);
-	predict_info.result_set_names = std::move(bound_predict_p.result_set_names);
-	predict_info.input_set_names = std::move(bound_predict_p.input_set_names);
-	predict_info.result_set_types = std::move(bound_predict_p.result_set_types);
-	predict_info.options = std::move(bound_predict_p.options);
+	predict_info.model_type = bound_predict_p->model_type;
+	predict_info.model_path = std::move(bound_predict_p->model_path);
+	predict_info.prompt = std::move(bound_predict_p->prompt);
+	predict_info.base_api = std::move(bound_predict_p->base_api);
+	predict_info.secret = std::move(bound_predict_p->secret);
+	predict_info.input_mask = std::move(bound_predict_p->input_mask);
+	predict_info.result_set_names = std::move(bound_predict_p->result_set_names);
+	predict_info.input_set_names = std::move(bound_predict_p->input_set_names);
+	predict_info.result_set_types = std::move(bound_predict_p->result_set_types);
+	predict_info.options = std::move(bound_predict_p->options);
 }
 
 unique_ptr<Predictor> PhysicalPredict::InitPredictor(const PredictInfo &info, const std::string &api_key) {

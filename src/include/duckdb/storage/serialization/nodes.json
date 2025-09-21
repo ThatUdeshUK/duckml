@@ -413,8 +413,7 @@
         "name": "result_set_types",
         "type": "vector<LogicalType>"
       }
-    ],
-    "pointer_type": "none"
+    ]
   },
   {
     "class": "ColumnDefinition",

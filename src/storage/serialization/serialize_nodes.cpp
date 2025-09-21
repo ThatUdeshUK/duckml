@@ -163,12 +163,12 @@ void BoundPredictInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(103, "result_set_types", result_set_types);
 }
 
-BoundPredictInfo BoundPredictInfo::Deserialize(Deserializer &deserializer) {
-	BoundPredictInfo result;
-	deserializer.ReadPropertyWithDefault<string>(100, "model_name", result.model_name);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(101, "types", result.types);
-	deserializer.ReadPropertyWithDefault<vector<string>>(102, "result_set_names", result.result_set_names);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(103, "result_set_types", result.result_set_types);
+unique_ptr<BoundPredictInfo> BoundPredictInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<BoundPredictInfo>(new BoundPredictInfo());
+	deserializer.ReadPropertyWithDefault<string>(100, "model_name", result->model_name);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(101, "types", result->types);
+	deserializer.ReadPropertyWithDefault<vector<string>>(102, "result_set_names", result->result_set_names);
+	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(103, "result_set_types", result->result_set_types);
 	return result;
 }
 

@@ -37,5 +37,6 @@ public:
 private:
     void GenerateGrammar();
     std::string GenerateSystemMessage(bool is_array) const;
+    void LlmApiPredictor::PredictBatch(ClientContext &client, DataChuck &input, int rows, int batch, int batch_size, const PredictInfo &info);
 };
 } // namespace duckdb

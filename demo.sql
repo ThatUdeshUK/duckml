@@ -13,6 +13,11 @@ CREATE LLM MODEL gemma2 PATH '/scratch1/ukumaras/models/llm/gemma-2-2b-it.gguf'Â
 -- view models
 SELECT model_name, model_type, model_path FROM ipdb_models();
 
+SET llm_use_batch = false;
+SET ml_batch_size = 16;
+SET llm_use_cache = false;
+SET pull_predict_filter = false;
+
 -- Get the total value of orders sent to each state.
 SELECT * FROM Orders LIMIT 5;
 SELECT * FROM Customer LIMIT 5;
@@ -27,7 +32,7 @@ SELECT sum(total_amount)
 FROM Customer AS c
 JOIN Orders AS o
 ON o.customer_id = c.customer_id
-GROUP BY LLM o4mini (PROMPT 'extract the {state VARCHAR} from the {{address}}') AS state;
+GROUP BY LLM o4mini (PROMPT 'extract the {state VARCHAR} from the {{address}}');
 
 -- Get all the states in the US and their sales taxes.
 SELECT state, state_tax 
@@ -56,6 +61,12 @@ JOIN Review AS r ON p.product_id = r.product_id
 WHERE c.name = 'CPU'
 AND LLM o4mini (PROMPT 'is the {sentiment VARCHAR} of the {{review_text}} positive or negative') = 'negative';
 
+SELECT p.name, r.review_text
+FROM Product AS p 
+JOIN Category AS c ON p.category_id = c.category_id
+JOIN LLM o4mini (PROMPT 'is the {sentiment VARCHAR} of the {{review_text}} positive or negative', Review) AS r ON p.product_id = r.product_id
+WHERE c.name = 'CPU'
+AND sentiment = 'negative';
 
 -- Get motherboards compatible with 'AMD Ryzen 9 7950X'
 FROM Product LIMIT 5;

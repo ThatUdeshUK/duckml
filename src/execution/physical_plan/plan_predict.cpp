@@ -7,7 +7,7 @@
 namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPredict &op) {
-	switch (op.bound_predict.model_type) {
+	switch (op.bound_predict->model_type) {
 	case ModelType::TABULAR:
 	case ModelType::LM: {
 		D_ASSERT(op.children.size() == 1);
@@ -29,11 +29,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPredict &op) {
 		idx_t edge_cardinality = op.children[1]->EstimateCardinality(context);
 		auto &node_plan = CreatePlan(*op.children[0]);
 		auto &edge_plan = CreatePlan(*op.children[1]);
-		return Make<PhysicalGNNPredict>(std::move(op.types), node_plan, edge_plan, node_cardinality, edge_cardinality, std::move(op.bound_predict));
+		return Make<PhysicalGNNPredict>(std::move(op.types), node_plan, edge_plan, node_cardinality, edge_cardinality, *op.bound_predict.get());
 	}
 	default:
 		throw InternalException("Plan Error: Unknown model type `" +
-		                        std::string(EnumUtil::ToChars<ModelType>(op.bound_predict.model_type)));
+		                        std::string(EnumUtil::ToChars<ModelType>(op.bound_predict->model_type)));
 	}
 }
 

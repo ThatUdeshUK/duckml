@@ -14,6 +14,7 @@
 #include "duckdb/optimizer/empty_result_pullup.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
+#include "duckdb/optimizer/predict_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/join_filter_pushdown_optimizer.hpp"
@@ -123,12 +124,27 @@ void Optimizer::RunBuiltInOptimizers() {
 		SumRewriterOptimizer optimizer(*this);
 		optimizer.Optimize(plan);
 	});
-
+	
+	// std::cout << "After SUM rewrites" << std::endl;
+	// plan->Print();
+	
 	// perform filter pullup
 	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
 		FilterPullup filter_pullup;
 		plan = filter_pullup.Rewrite(std::move(plan));
 	});
+
+	// std::cout << "After filter pullup" << std::endl;
+	// plan->Print();
+
+	// perform predict pullup
+	// RunOptimizer(OptimizerType::PREDICT_PULLUP, [&]() {
+	// 	PredictPullup predict_pullup;
+	// 	plan = predict_pullup.Rewrite(std::move(plan));
+	// });
+
+	// std::cout << "After predict pullup" << std::endl;
+	// plan->Print();
 
 	// perform filter pushdown
 	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
@@ -138,6 +154,8 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = filter_pushdown.Rewrite(std::move(plan));
 	});
 
+	// std::cout << "After filter pushdown" << std::endl;
+	// plan->Print();
 	// derive and push filters into materialized CTEs
 	RunOptimizer(OptimizerType::CTE_FILTER_PUSHER, [&]() {
 		CTEFilterPusher cte_filter_pusher(*this);
@@ -166,12 +184,18 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
 
+	// std::cout << "After CTE filter pushdown, regex range, deliminator, empty result" << std::endl;
+	// plan->Print();
+
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
 	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 		JoinOrderOptimizer optimizer(context);
 		plan = optimizer.Optimize(std::move(plan));
 	});
+
+	// std::cout << "After join order" << std::endl;
+	// plan->Print();
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
@@ -202,6 +226,9 @@ void Optimizer::RunBuiltInOptimizers() {
 		ColumnLifetimeAnalyzer column_lifetime(*this, *plan, true);
 		column_lifetime.VisitOperator(*plan);
 	});
+
+	// std::cout << "After column life time" << std::endl;
+	// plan->Print();
 
 	// Once we know the column lifetime, we have more information regarding
 	// what relations should be the build side/probe side.
@@ -260,11 +287,17 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = expression_heuristics.Rewrite(std::move(plan));
 	});
 
+	// std::cout << "After reorder filter" << std::endl;
+	// plan->Print();
+
 	// perform join filter pushdown after the dust has settled
 	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
 		join_filter_pushdown.VisitOperator(*plan);
 	});
+
+	// std::cout << "After join filter pushdown" << std::endl;
+	// plan->Print();
 }
 
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan_p) {

@@ -2889,6 +2889,7 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::INVALID), "INVALID" },
 		{ static_cast<uint32_t>(OptimizerType::EXPRESSION_REWRITER), "EXPRESSION_REWRITER" },
 		{ static_cast<uint32_t>(OptimizerType::FILTER_PULLUP), "FILTER_PULLUP" },
+		{ static_cast<uint32_t>(OptimizerType::PREDICT_PULLUP), "PREDICT_PULLUP" },
 		{ static_cast<uint32_t>(OptimizerType::FILTER_PUSHDOWN), "FILTER_PUSHDOWN" },
 		{ static_cast<uint32_t>(OptimizerType::EMPTY_RESULT_PULLUP), "EMPTY_RESULT_PULLUP" },
 		{ static_cast<uint32_t>(OptimizerType::CTE_FILTER_PUSHER), "CTE_FILTER_PUSHER" },
@@ -2920,12 +2921,12 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 28, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 29, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 28, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 29, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {
