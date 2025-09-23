@@ -82,3 +82,28 @@ SELECT CPUs.name, Motherboards.name
 FROM (Product AS p JOIN Category AS c1 ON p.category_id = c1.category_id AND c1.name = 'Motherboard') AS Motherboards
 JOIN (Product AS o JOIN Category AS c2 ON o.category_id = c2.category_id AND c2.name = 'CPU') AS CPUs
 ON LLM o4mini (PROMPT 'is CPU {{CPUs.name}} {compatible BOOLEAN} with motherboard {{Motherboards.name}}');
+
+SET ml_batch_size = 16;
+CREATE TABLE review_results_2 AS SELECT *
+FROM food_review
+WHERE LLM o4mini(PROMPT 'is the {review_type VARCHAR} of {{review}} is about. Only choose `food` or `service`.') = 'food';
+
+
+CREATE TABLE review_sample_results AS SELECT *
+FROM food_review_sample
+WHERE LLM o4mini(PROMPT 'is the {review_type VARCHAR} of {{review}} is about. Only choose `food` or `service`.') = 'food';
+
+SELECT r.review_id, r.user_id, b.name, r.text
+FROM review r
+JOIN business b ON r.business_id = b.business_id
+WHERE POSITION('Italian' IN b.categories) > 0
+  AND b.stars >= 4.0
+  AND b.review_count > 100;
+
+SELECT r.review_id, r.user_id, b.name, r.text
+FROM review r
+JOIN business b ON r.business_id = b.business_id
+WHERE llm('extract the {sentiment VARCHAR} of the review', r.text) = 'negative'
+  AND POSITION('Italian' IN b.categories) > 0
+  AND b.stars >= 4.0
+  AND b.review_count > 100;

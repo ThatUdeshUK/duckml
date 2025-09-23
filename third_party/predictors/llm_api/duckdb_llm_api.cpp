@@ -11,6 +11,9 @@
 #include <cmath>
 #include <string>
 #include <utility>
+#include <future>
+
+#define LLM_USE_THREADS 1
 
 namespace duckdb {
 LlmApiPredictor::LlmApiPredictor(std::string prompt, std::string base_api, std::string secret)
@@ -119,6 +122,101 @@ std::string LlmApiPredictor::GenerateSystemMessage(bool is_array) const {
 	return R"(You are a helpful assistant. Always respond **only** with valid JSON object (i.e. not an array) in format )" + this->grammar + suffix;
 }
 
+std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(ClientContext &client, openai::OpenAI& api, DataChunk &input, int rows, int batch, int batch_size, const PredictInfo &info) {
+	auto result = make_uniq<BatchResult>();
+	
+	int tokens = 0;
+
+	int frow = batch * batch_size;                // Offset of first row
+	int lrow = std::min(frow + batch_size, rows); // Offset of last row
+	int num_rows = lrow - frow;                   // Number of rows in the batch
+
+	int cols = info.input_mask.size();
+
+	if (use_batch) {
+		std::string llm_out {};
+
+		std::stringstream ss;
+		ss << this->prompt + "; \nRespond with a JSON object for each the following " << num_rows << " inputs:\n[";
+		for (int i = frow; i < lrow; ++i) {
+			ss << "{" << prompt_util.embed_prompt(this->prompt, i, input, info, true) << "},\n";
+		}
+		ss << "]";
+
+		std::string rewritten = ss.str();
+		std::cout << "Prompt len: " << rewritten.size() << std::endl;
+
+		nlohmann::json request;
+		request["model"] = this->model_path;
+		request["messages"] = {
+			{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
+			{{"content", rewritten}, {"role", "user"}}};
+		// request["max_tokens"] = 64;
+		// request["temperature"] = 0;
+
+		auto req_ts = std::chrono::steady_clock::now();
+		auto completion = api.post("chat/completions", request);
+		auto req_te = std::chrono::steady_clock::now();
+		auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+		std::cout << "Batch request time (s):" << req_time << std::endl;
+		tokens += completion["usage"]["total_tokens"].get<int>();
+
+		for (auto &msg : completion["choices"]) {
+			llm_out = msg["message"]["content"].get<std::string>();
+		}
+		std::cout << llm_out << "||" << std::endl;
+
+		result->outputs.push_back(llm_out);
+		result->tokens = tokens;
+		result->predict = req_time;
+		result->is_concat = true;
+		return std::move(result);
+	}
+
+	long total_time = 0;
+	for (int i = frow; i < lrow; ++i) {
+		std::string llm_out {};
+
+		std::string embeded = prompt_util.embed_prompt(this->prompt, i, input, info);
+		if (use_cache && this->cache.find(embeded) != this->cache.end()) {
+			std::cout << "Cache hit!" << std::endl;
+			llm_out = this->cache[embeded];
+		} else {
+			std::string rewritten = this->prompt + ";\n" + embeded;
+
+			nlohmann::json request;
+			request["model"] = this->model_path;
+			request["messages"] = {
+				{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
+				{{"content", rewritten}, {"role", "user"}}};
+			// request["max_tokens"] = 64;
+			// request["temperature"] = 0;
+
+			auto req_ts = std::chrono::steady_clock::now();
+			auto completion = api.post("chat/completions", request);
+			auto req_te = std::chrono::steady_clock::now();
+			auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+			std::cout << "Request time (s):" << req_time << std::endl;
+			total_time += req_time;
+			tokens += completion["usage"]["total_tokens"].get<int>();
+
+			for (auto &msg : completion["choices"]) {
+				llm_out = msg["message"]["content"].get<std::string>();
+			}
+
+			std::string cache_out = llm_out;
+			if (use_cache)
+				this->cache[embeded] = std::move(cache_out);
+		}
+		std::cout << llm_out << "||" << std::endl;
+		result->outputs.push_back(llm_out);
+	}
+	result->tokens = tokens;
+	result->predict = total_time;
+	result->is_concat = false;
+	return std::move(result);
+}
+
 /**
  * Infer the models for a chunk (column vectors containing tupes).
  *
@@ -139,118 +237,69 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	if (rows % batch_size != 0)
 		rounds++;
 
-	int tokens = 0;
-	for (size_t batch = 0; batch < rounds; batch++) {
+	std::cout << "Batch Size: " << batch_size << ", Rounds: " << rounds << std::endl;
+
+	// auto f1 = std::async(std::launch::async, compute, 10);
+    // auto f2 = std::async(std::launch::async, compute, 20);
+
+    // std::cout << f1.get() << " " << f2.get() << "\n";
 #if OPT_TIMING
-		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 #endif
 
-		int frow = batch * batch_size;                // Offset of first row
-		int lrow = std::min(frow + batch_size, rows); // Offset of last row
-		int num_rows = lrow - frow;                   // Number of rows in the batch
+#if LLM_USE_THREADS
 
-		int cols = info.input_mask.size();
+	auto &db = DatabaseInstance::GetDatabase(client);
+	auto &api = openai::start(db, base_api, secret);
 
-#if OPT_TIMING
-		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-		stats->move += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-
-		begin = std::chrono::steady_clock::now();
-#endif 
-
-		auto &db = DatabaseInstance::GetDatabase(client);
-		auto &api = openai::start(db, base_api, secret);
-
-		if (use_batch) {
-			std::string llm_out {};
-
-			std::stringstream ss;
-			ss << this->prompt + "; \nRespond with a JSON object for each the following " << num_rows << " inputs:\n[";
-			for (int i = frow; i < lrow; ++i) {
-				ss << "{" << prompt_util.embed_prompt(this->prompt, i, input, info, true) << "},\n";
-			}
-			ss << "]";
-
-			std::string rewritten = ss.str();
-			std::cout << rewritten << std::endl;
-
-			nlohmann::json request;
-			request["model"] = this->model_path;
-			request["messages"] = {
-				{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
-				{{"content", rewritten}, {"role", "user"}}};
-			// request["max_tokens"] = 64;
-			// request["temperature"] = 0;
-
-
-			auto req_ts = std::chrono::steady_clock::now();
-			auto completion = api.post("chat/completions", request);
-			auto req_te = std::chrono::steady_clock::now();
-			auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
-			std::cout << "Batch request time (s):" << req_time << std::endl;
-			tokens += completion["usage"]["total_tokens"].get<int>();
-
-			for (auto &msg : completion["choices"]) {
-				llm_out = msg["message"]["content"].get<std::string>();
-			}
-			std::cout << llm_out << "||" << std::endl;
-			prompt_util.extract_array_data(llm_out, output, frow, info);
-			continue;
+	int n_threads = 16;
+    std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
+	size_t total_tokens = 0;
+	for (size_t batch = 0; batch < rounds; batch = batch + n_threads) {
+		for (size_t run = 0; run < n_threads && (batch + run) * batch_size < rows; run++) {
+			int batch_i = batch + run;
+			futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictBatch, this, std::ref(client), std::ref(api), std::ref(input), rows, batch_i, batch_size, std::cref(info)));
 		}
-
-		for (int i = frow; i < lrow; ++i) {
-			std::string llm_out {};
-
-			std::string embeded = prompt_util.embed_prompt(this->prompt, i, input, info);
-			if (use_cache && this->cache.find(embeded) != this->cache.end()) {
-				std::cout << "Cache hit!" << std::endl;
-				llm_out = this->cache[embeded];
+		size_t run = 0;
+		for (auto &f : futures) {
+			int frow = (batch + run) * batch_size;
+			auto result = f.get();
+			total_tokens += result->tokens;
+			if (result->is_concat) {
+				prompt_util.extract_array_data(result->outputs[0], output, frow, info);
 			} else {
-				std::string rewritten = this->prompt + ";\n" + embeded;
-
-				nlohmann::json request;
-				request["model"] = this->model_path;
-				request["messages"] = {
-					{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
-					{{"content", rewritten}, {"role", "user"}}};
-				// request["max_tokens"] = 64;
-				// request["temperature"] = 0;
-
-				auto req_ts = std::chrono::steady_clock::now();
-				auto completion = api.post("chat/completions", request);
-				auto req_te = std::chrono::steady_clock::now();
-				auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
-				std::cout << "Request time (s):" << req_time << std::endl;
-				tokens += completion["usage"]["total_tokens"].get<int>();
-
-				for (auto &msg : completion["choices"]) {
-					llm_out = msg["message"]["content"].get<std::string>();
+				auto n_rows = result->outputs.size();
+				for (size_t i = 0; i < n_rows; i++) {
+					prompt_util.extract_row_data(result->outputs[i], frow + i, output, info);
 				}
-
-				std::string cache_out = llm_out;
-				if (use_cache)
-					this->cache[embeded] = std::move(cache_out);
 			}
-			std::cout << llm_out << "||" << std::endl;
-			prompt_util.extract_row_data(llm_out, i, output, info);
+			run++;
 		}
-
-#if OPT_TIMING
-		end = std::chrono::steady_clock::now();
-		stats->predict += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-
-		begin = std::chrono::steady_clock::now();
-#endif
-
-#if OPT_TIMING
-		end = std::chrono::steady_clock::now();
-		stats->move_rev += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-#endif
-		// TODO: Calculate the accuracy metric here for the prediction and update the stats.correct and stats.total
-		// stats->correct += <no_of_positives>;
-		// stats->total += rows;
+		futures.clear();
 	}
-	std::cout << "total tokens: " << tokens << std::endl;
+#else
+	for (size_t batch = 0; batch < rounds; batch++) {
+		int frow = batch * batch_size;                // Offset of first row
+		auto result = PredictBatch(client, api, input, rows, batch, batch_size, info);
+		total_tokens += result->tokens;
+		if (result->is_concat) {
+			prompt_util.extract_array_data(result->outputs[0], output, frow, info);
+		} else {
+			auto n_rows = result->outputs.size();
+			for (size_t i = 0; i < n_rows; i++) {
+				prompt_util.extract_row_data(result->outputs[i], frow + i, output, info);
+			}
+		}
+	}
+#endif
+	std::cout << "Total tokens: " << total_tokens << std::endl;
+
+#if OPT_TIMING
+	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	long total_time = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+	stats->predict += total_time;
+#endif
+	std::cout << "Total time (s): " << total_time << std::endl;
 }
 
 void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const PredictInfo &info, unique_ptr<PredictStats> &stats) {

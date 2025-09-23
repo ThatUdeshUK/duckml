@@ -160,7 +160,7 @@ struct ClientConfig {
 	string http_logging_output;
 
 	//! Batch size used by the ML operator for inference
-	idx_t ml_batch_size = 2048;
+	idx_t ml_batch_size = 16;
 
 	bool llm_use_batch = true;
 	bool llm_use_cache = true;
