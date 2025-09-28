@@ -161,7 +161,8 @@ struct ClientConfig {
 
 	//! Batch size used by the ML operator for inference
 	idx_t ml_batch_size = 16;
-
+	
+	idx_t llm_no_threads = 16;
 	bool llm_use_batch = true;
 	bool llm_use_cache = true;
 	bool pull_predict_filter = true;

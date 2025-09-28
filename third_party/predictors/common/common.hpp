@@ -126,6 +126,9 @@ public:
             auto json_str = extract_json(llm_out);
             auto out_json = nlohmann::json::parse(json_str);
             populate_row_data(out_json, row, output, info);
+        } catch (const std::runtime_error& e) {
+            std::cout << "Runtime error: " << e.what() << std::endl;
+            fill_null(row, output, info);
         } catch (const nlohmann::json::parse_error& e) {
             std::cout << "JSON parse issue: " << e.what() << std::endl;
             fill_null(row, output, info);

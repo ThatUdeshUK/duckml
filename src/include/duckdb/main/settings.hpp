@@ -325,6 +325,16 @@ struct MLBatchSizeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct LLMNoThreadsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "llm_no_threads";
+	static constexpr const char *Description = "No of threads to use for LLM inference";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct LLMUseBatchSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "llm_use_batch";

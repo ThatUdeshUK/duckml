@@ -1334,6 +1334,24 @@ Value MLBatchSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// LLM Number of Threads
+//===--------------------------------------------------------------------===//
+void LLMNoThreadsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).llm_no_threads = ClientConfig().llm_no_threads;
+}
+
+void LLMNoThreadsSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
+	config.llm_no_threads = parameter;
+}
+
+Value LLMNoThreadsSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BIGINT(NumericCast<int64_t>(config.llm_no_threads));
+}
+
+//===--------------------------------------------------------------------===//
 // LLM Use Batch
 //===--------------------------------------------------------------------===//
 void LLMUseBatchSetting::ResetLocal(ClientContext &context) {

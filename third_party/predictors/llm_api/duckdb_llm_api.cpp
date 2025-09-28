@@ -12,6 +12,7 @@
 #include <string>
 #include <utility>
 #include <future>
+#include <thread>
 
 #define LLM_USE_THREADS 1
 
@@ -40,8 +41,12 @@ void LlmApiPredictor::Config(const ClientConfig &client_config, const case_insen
 	this->use_batch = (options.find("use_batch") != options.end())
 	                           ? BooleanValue::Get(options.at("use_batch"))
 	                           : client_config.llm_use_batch;
-	
-	// TODO: Implement any configurations here.
+	this->n_threads = (options.find("n_threads") != options.end())
+							? IntegerValue::Get(options.at("n_threads"))
+							: client_config.llm_no_threads;
+	this->req_per_min = (options.find("req_per_min") != options.end())
+							? IntegerValue::Get(options.at("req_per_min"))
+							: 500;
 	this->n_predict = 64;
 }
 
@@ -159,18 +164,27 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(ClientContext &client
 		auto req_te = std::chrono::steady_clock::now();
 		auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
 		std::cout << "Batch request time (s):" << req_time << std::endl;
-		tokens += completion["usage"]["total_tokens"].get<int>();
+		if (completion.contains("error")) {
+			std::cout << "Batch call failed! Falling back to rowise calls. Error: " << completion["error"] << std::endl;
+			if (completion["code"] == 429) {
+				std::cout << "Wait because too much requests!" << std::endl;
+				std::this_thread::sleep_for(std::chrono::seconds(30));
+			}
+		} else {
+			tokens += completion["usage"]["total_tokens"].get<int>();
 
-		for (auto &msg : completion["choices"]) {
-			llm_out = msg["message"]["content"].get<std::string>();
+			for (auto &msg : completion["choices"]) {
+				llm_out = msg["message"]["content"].get<std::string>();
+			}
+			std::cout << llm_out << "||" << std::endl;
+
+			result->outputs.push_back(llm_out);
+			result->tokens = tokens;
+			result->predict = req_time;
+			result->is_concat = true;
+			result->n_calls = 1;
+			return std::move(result);
 		}
-		std::cout << llm_out << "||" << std::endl;
-
-		result->outputs.push_back(llm_out);
-		result->tokens = tokens;
-		result->predict = req_time;
-		result->is_concat = true;
-		return std::move(result);
 	}
 
 	long total_time = 0;
@@ -197,6 +211,15 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(ClientContext &client
 			auto req_te = std::chrono::steady_clock::now();
 			auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
 			std::cout << "Request time (s):" << req_time << std::endl;
+			if (completion.contains("error")) {
+				std::cout << "LLM call failed! Error: " << completion["error"] << std::endl;
+				if (completion["code"] == 429) {
+					std::cout << "Wait because too much requests!" << std::endl;
+					std::this_thread::sleep_for(std::chrono::seconds(30));
+				}
+				result->outputs.push_back("");
+				continue;
+			}
 			total_time += req_time;
 			tokens += completion["usage"]["total_tokens"].get<int>();
 
@@ -214,6 +237,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(ClientContext &client
 	result->tokens = tokens;
 	result->predict = total_time;
 	result->is_concat = false;
+	result->n_calls = num_rows;
 	return std::move(result);
 }
 
@@ -233,29 +257,31 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	// Implemented to support mini-batches (i.e., batch_size < vector_size).
 	// However, unless changed, batch_size == vector_size by default.
 	// Check `ml_batch_size` in ClientConfig at `src/include/duckdb/main/client_config.hpp`
+#if LLM_USE_THREADS
+    std::cout << "No. of threads: " << this->n_threads << std::endl;
+    std::cout << "Requests per min: " << this->req_per_min << std::endl;
+#endif
+
 	int rounds = rows / batch_size;
 	if (rows % batch_size != 0)
 		rounds++;
 
 	std::cout << "Batch Size: " << batch_size << ", Rounds: " << rounds << std::endl;
 
-	// auto f1 = std::async(std::launch::async, compute, 10);
-    // auto f2 = std::async(std::launch::async, compute, 20);
-
-    // std::cout << f1.get() << " " << f2.get() << "\n";
 #if OPT_TIMING
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 #endif
 
-#if LLM_USE_THREADS
-
 	auto &db = DatabaseInstance::GetDatabase(client);
 	auto &api = openai::start(db, base_api, secret);
 
-	int n_threads = 16;
+#if LLM_USE_THREADS
     std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
 	size_t total_tokens = 0;
+	size_t sub_reqs = 0;
+	size_t sub_secs = 0;
 	for (size_t batch = 0; batch < rounds; batch = batch + n_threads) {
+		std::chrono::steady_clock::time_point b_ts = std::chrono::steady_clock::now();
 		for (size_t run = 0; run < n_threads && (batch + run) * batch_size < rows; run++) {
 			int batch_i = batch + run;
 			futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictBatch, this, std::ref(client), std::ref(api), std::ref(input), rows, batch_i, batch_size, std::cref(info)));
@@ -264,6 +290,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		for (auto &f : futures) {
 			int frow = (batch + run) * batch_size;
 			auto result = f.get();
+			sub_reqs += result->n_calls;
 			total_tokens += result->tokens;
 			if (result->is_concat) {
 				prompt_util.extract_array_data(result->outputs[0], output, frow, info);
@@ -276,6 +303,17 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			run++;
 		}
 		futures.clear();
+		std::chrono::steady_clock::time_point b_te = std::chrono::steady_clock::now();
+		sub_secs += std::chrono::duration_cast<std::chrono::seconds>(b_te - b_ts).count();
+		
+		if (sub_reqs - n_threads > req_per_min) {
+			// We might over that request per min limit
+			if (sub_secs < 60) {
+				std::this_thread::sleep_for(std::chrono::seconds(60 - sub_secs));
+			}
+			sub_reqs = 0;
+			sub_secs = 0;
+		}
 	}
 #else
 	for (size_t batch = 0; batch < rounds; batch++) {
@@ -299,7 +337,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	long total_time = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 	stats->predict += total_time;
 #endif
-	std::cout << "Total time (s): " << total_time << std::endl;
+	std::cout << "Total time (s): " << total_time * 1.0 / 1000000 << std::endl;
 }
 
 void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const PredictInfo &info, unique_ptr<PredictStats> &stats) {

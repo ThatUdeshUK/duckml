@@ -47,7 +47,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundPredi
 	result->predict_info.result_set_names = expr.bound_predict->result_set_names;
 	result->predict_info.input_set_names = expr.bound_predict->input_set_names;
 	result->predict_info.result_set_types = expr.bound_predict->result_set_types;
-	// result->predict_info.options = std::move(bound_predict_p.options);
+	result->predict_info.options = expr.bound_predict->options;
 
 	std::string api_key;
 	if (!result->predict_info.secret.empty()) {

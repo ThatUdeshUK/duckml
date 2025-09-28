@@ -17,6 +17,7 @@ namespace duckdb {
 
 struct BatchResult {
     size_t tokens;
+    long n_calls;
 	long move;
 	long predict;
 	long move_rev;
@@ -31,6 +32,9 @@ public:
     std::string base_api;
     std::string secret;
     std::string grammar;
+
+    int n_threads;
+    int req_per_min;
     
 private:
     PromptUtil prompt_util;
@@ -47,6 +51,7 @@ public:
 
 private:
     void GenerateGrammar();
-    std::string GenerateSystemMessage(bool is_array) const;
+    std::string GenerateSystemMessage(bool is_array) const; 
+
 };
 } // namespace duckdb

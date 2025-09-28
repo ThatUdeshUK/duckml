@@ -114,12 +114,20 @@ public:
         if (!response->Success()) {
             if (response->HasRequestError()) {
                 // request error - this means something went wrong performing the request
-                throw duckdb::IOException("Failed call LLM at URL \"%s\"\n (ERROR %s)", url,
-                                           response->GetRequestError());
+                // throw duckdb::IOException("Failed call LLM at URL \"%s\"\n (ERROR %s)", url,
+                //                            response->GetRequestError());
+                Json out{};
+                out["error"] = response->GetRequestError();
+                out["code"] = -1;
+                return out;
             }
-            // if this was not a request error this means the server responded - report the response status and response
-            throw duckdb::HTTPException(*response, "Failed to call LLM at URL \"%s\" (HTTP %n) - %s\n",
-                                        url, int(response->status), response->body);
+            // // if this was not a request error this means the server responded - report the response status and response
+            // throw duckdb::HTTPException(*response, "Failed to call LLM at URL \"%s\" (HTTP %n) - %s: Request: %s\n",
+            //                             url, int(response->status), response->reason, data);
+            Json out{};
+            out["error"] = response->reason;
+            out["code"] = int(response->status);
+            return out;
         }
 
         Json json{};

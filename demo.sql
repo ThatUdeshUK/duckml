@@ -5,7 +5,10 @@ SELECT * FROM duckdb_secrets();
 SELECT * FROM ipdb_models();
 
 -- create remote model
-CREATE LLM MODEL o4mini PATH 'o4-mini' ON PROMPT API 'https://api.openai.com/v1/' SECRET openai_key;
+CREATE LLM MODEL o4mini PATH 'o4-mini' ON PROMPT API 'https://api.openai.com/v1/' SECRET openai_key OPTIONS {"req_per_min": 30};
+
+-- create fanar model
+CREATE LLM MODEL fanar PATH 'Fanar' ON PROMPT API 'https://api.fanar.qa/v1/' SECRET qcri OPTIONS {"req_per_min": 30};
 
 -- create local model
 CREATE LLM MODEL gemma2 PATH '/scratch1/ukumaras/models/llm/gemma-2-2b-it.gguf' ON PROMPT;
@@ -91,7 +94,11 @@ WHERE LLM o4mini(PROMPT 'is the {review_type VARCHAR} of {{review}} is about. On
 
 CREATE TABLE review_sample_results AS SELECT *
 FROM food_review_sample
-WHERE LLM o4mini(PROMPT 'is the {review_type VARCHAR} of {{review}} is about. Only choose `food` or `service`.') = 'food';
+WHERE LLM o4mini(PROMPT 'is the {review_type VARCHAR} of {{review}} is about `food` or `service`.') = 'food';
+
+CREATE TABLE review_sample_filter_fanar AS SELECT *
+FROM food_review_sample
+WHERE LLM fanar (PROMPT 'is this {{review}} is about {is_food BOOLEAN}');
 
 SELECT r.review_id, r.user_id, b.name, r.text
 FROM review r
@@ -107,3 +114,9 @@ WHERE llm('extract the {sentiment VARCHAR} of the review', r.text) = 'negative'
   AND POSITION('Italian' IN b.categories) > 0
   AND b.stars >= 4.0
   AND b.review_count > 100;
+
+SELECT *, reason
+FROM LLM ("{reason VARCHAR} and {is_negative BOOLEAN} of the review", Reviews)
+WHERE is_negative;
+
+SELECT category_id, LLM AGG o4mini (PROMPT 'what is the computer {component VARCHAR} from the {{description}}') FROM Product GROUP BY category_id;
