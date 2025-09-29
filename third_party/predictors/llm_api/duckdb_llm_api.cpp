@@ -306,14 +306,14 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		std::chrono::steady_clock::time_point b_te = std::chrono::steady_clock::now();
 		sub_secs += std::chrono::duration_cast<std::chrono::seconds>(b_te - b_ts).count();
 		
-		if (sub_reqs - n_threads > req_per_min) {
-			// We might over that request per min limit
-			if (sub_secs < 60) {
-				std::this_thread::sleep_for(std::chrono::seconds(60 - sub_secs));
-			}
-			sub_reqs = 0;
-			sub_secs = 0;
-		}
+		// if (sub_reqs - n_threads > req_per_min) {
+		// 	// We might over that request per min limit
+		// 	if (sub_secs < 60) {
+		// 		std::this_thread::sleep_for(std::chrono::seconds(60 - sub_secs));
+		// 	}
+		// 	sub_reqs = 0;
+		// 	sub_secs = 0;
+		// }
 	}
 #else
 	for (size_t batch = 0; batch < rounds; batch++) {

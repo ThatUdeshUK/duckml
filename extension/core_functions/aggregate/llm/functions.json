@@ -1,0 +1,10 @@
+[
+    {
+        "name": "llmAgg",
+        "parameters": "prompt,arg",
+        "description": "Returns a string aggregated from a LLM.",
+        "example": "llmAgg(A)",
+        "type": "aggregate_function",
+        "struct": "LlmAggFun"
+    }
+]

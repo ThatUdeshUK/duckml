@@ -22,7 +22,6 @@
 #include "duckdb/planner/expression/bound_predict_expression.hpp"
 #include "duckdb/catalog/catalog_entry/model_catalog_entry.hpp"
 
-
 namespace duckdb {
 
 static bool IsFunctionallyDependent(const unique_ptr<Expression> &expr, const vector<unique_ptr<Expression>> &deps) {
@@ -381,11 +380,16 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 	result->bound_predict->model_path = stored_model_data.model_path;
 	result->bound_predict->base_api = stored_model_data.base_api;
 	result->bound_predict->secret = stored_model_data.secret;
-	
+
+	// FunctionBinder function_binder(binder);
+	// auto bound_function = ListFun::GetFunction();
+	// auto result = function_binder.BindAggregateFunction(bound_function, std::move(children), nullptr, AggregateType::NON_DISTINCT);
+
 	if (!result) {
 		error.AddQueryLocation(predict);
 		error.Throw();
 	}
+
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;
 	auto entry = node.aggregate_map.find(*result);

@@ -3,6 +3,7 @@
 #include "core_functions/aggregate/distributive_functions.hpp"
 #include "core_functions/aggregate/holistic_functions.hpp"
 #include "core_functions/aggregate/nested_functions.hpp"
+#include "core_functions/aggregate/llm_functions.hpp"
 #include "core_functions/aggregate/regression_functions.hpp"
 #include "core_functions/scalar/bit_functions.hpp"
 #include "core_functions/scalar/blob_functions.hpp"
@@ -252,6 +253,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(ListUniqueFun),
 	DUCKDB_SCALAR_FUNCTION(ListValueFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET_ALIAS(ListaggFun),
+	DUCKDB_AGGREGATE_FUNCTION(LlmAggFun),
 	DUCKDB_SCALAR_FUNCTION(LnFun),
 	DUCKDB_SCALAR_FUNCTION_SET(LogFun),
 	DUCKDB_SCALAR_FUNCTION(Log10Fun),
