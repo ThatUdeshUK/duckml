@@ -257,6 +257,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	// Implemented to support mini-batches (i.e., batch_size < vector_size).
 	// However, unless changed, batch_size == vector_size by default.
 	// Check `ml_batch_size` in ClientConfig at `src/include/duckdb/main/client_config.hpp`
+    std::cout << "No. tuples: " << rows << std::endl;
 #if LLM_USE_THREADS
     std::cout << "No. of threads: " << this->n_threads << std::endl;
     std::cout << "Requests per min: " << this->req_per_min << std::endl;
@@ -265,8 +266,9 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	int rounds = rows / batch_size;
 	if (rows % batch_size != 0)
 		rounds++;
-
-	std::cout << "Batch Size: " << batch_size << ", Rounds: " << rounds << std::endl;
+	
+	if (use_batch)
+		std::cout << "Batch Size: " << batch_size << ", Rounds: " << rounds << std::endl;
 
 #if OPT_TIMING
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -371,13 +373,17 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	// llm_out = llm_out.substr(1, llm_out.size() - 2);
 
 	int tokens = completion["usage"]["total_tokens"].get<int>();
-	std::cout << llm_out << "||" << " tokens: " << tokens << std::endl;
-	
+	std::cout << llm_out << "||" << std::endl;
+
+	std::cout << "Total tokens: " << tokens << std::endl;
+
 	prompt_util.extract_array_data(llm_out, output, 0, info, true);
 
 #if OPT_TIMING
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	stats->predict += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+	long total_time = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+	stats->predict += total_time;
+	std::cout << "Total time (s): " << total_time * 1.0 / 1000000 << std::endl;
 
 	stats->move_rev = 0;
 #endif

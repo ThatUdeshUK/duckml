@@ -9,6 +9,8 @@
 
 #include <regex>
 #include <iostream>
+#include <cctype>
+#include <algorithm>
 
 namespace duckdb {
 
@@ -62,15 +64,21 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 			stored_model_data.out_types.push_back(out_type);
 		}
 
-		static const std::regex in_re(R"(\{\{[A-Za-z_][A-Za-z0-9_]*\}\})");
-		words_begin = std::sregex_iterator(bound_predict->prompt.begin(), bound_predict->prompt.end(), in_re);
-		words_end = std::sregex_iterator();
+		// static const std::regex in_re(R"(\{\{[A-Za-z_][A-Za-z0-9_]*\}\})");
+		// words_begin = std::sregex_iterator(bound_predict->prompt.begin(), bound_predict->prompt.end(), in_re);
+		// words_end = std::sregex_iterator();
 
-		for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
-			std::smatch match = *i;
-			std::string match_str = match.str();
-			auto attr = match_str.substr(2, match_str.size() - 4);			
-			stored_model_data.input_set_names.push_back(attr);
+		for (auto &expr : ref.parsed_input_columns) {
+			if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+				auto &child_colref = expr->Cast<ColumnRefExpression>();
+				if (child_colref.IsQualified()) {
+					throw BinderException(*expr, "PREDICT expression cannot contain qualified columns");
+				}
+				stored_model_data.input_set_names.push_back(child_colref.GetColumnName());
+			}
+			// std::smatch match = *i;
+			// std::string match_str = match.str();
+			// auto attr = match_str.substr(2, match_str.size() - 4);			
 		}
 	}
 
@@ -88,19 +96,18 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 
 		vector<idx_t> input_mask;
 		if (!stored_model_data.input_set_names.empty()) {
+			case_insensitive_map_t<idx_t> name_map;
+			for (auto it = names.begin(); it != names.end(); ++it) {
+				auto index = static_cast<idx_t>(std::distance(names.begin(), it));
+				name_map[*it] = index;
+			}
 			for (const std::string &input_col : stored_model_data.input_set_names) {
-				bool feature_found = false;
-				for (auto it = names.begin(); it != names.end(); ++it) {
-					auto index = static_cast<idx_t>(std::distance(names.begin(), it));
-					if (input_col == *it) {
-						input_mask.push_back(index);
-						feature_found = true;
-						break;
-					}
-				}
-				if (!feature_found) {
+				std::cout << input_col << std::endl;
+				auto entry = name_map.find(input_col);
+				if (entry == name_map.end()) {
 					throw BinderException("Input table should contain the BY feature columns");
 				}
+				input_mask.push_back(entry->second);
 			}
 		} else if (!stored_model_data.exclude_set_names.empty()) {
 			for (auto it = names.begin(); it != names.end(); ++it) {

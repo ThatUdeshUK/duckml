@@ -310,6 +310,7 @@ private:
 	unique_ptr<ParsedExpression> TransformBinaryOperator(string op, unique_ptr<ParsedExpression> left,
 	                                                     unique_ptr<ParsedExpression> right);
 	static bool ConstructConstantFromExpression(const ParsedExpression &expr, Value &value);
+	static duckdb_libpgquery::PGColumnRef *MakePGColumnRef(const std::string &col_name);
 	//===--------------------------------------------------------------------===//
 	// TableRef transform
 	//===--------------------------------------------------------------------===//

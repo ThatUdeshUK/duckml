@@ -30,6 +30,8 @@ public:
 	string model_name;
 	//! The prompt for llm tasks
 	string prompt;
+	//! Input columns
+	vector<unique_ptr<ParsedExpression>> parsed_input_columns;
 	//! Aliases for the column names
 	vector<string> column_name_alias;
 

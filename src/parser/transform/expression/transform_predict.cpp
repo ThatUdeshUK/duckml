@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-static duckdb_libpgquery::PGColumnRef *MakePGColumnRef(const std::string &col_name) {
+duckdb_libpgquery::PGColumnRef* Transformer::MakePGColumnRef(const std::string &col_name) {
     // Allocate the node
     auto *colref = (duckdb_libpgquery::PGColumnRef *) duckdb_libpgquery::newNode(sizeof(duckdb_libpgquery::PGColumnRef), duckdb_libpgquery::T_PGColumnRef);
 

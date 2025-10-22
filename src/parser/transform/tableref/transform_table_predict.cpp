@@ -1,6 +1,8 @@
 #include "duckdb/parser/tableref/table_predict_ref.hpp"
 #include "duckdb/parser/transformer.hpp"
 
+#include <regex>
+
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformTablePredict(duckdb_libpgquery::PGPredictExpr &root) {
@@ -9,8 +11,25 @@ unique_ptr<TableRef> Transformer::TransformTablePredict(duckdb_libpgquery::PGPre
 	auto qname = TransformQualifiedName(*root.model_name);
 	result->model_name = qname.name;
 
-	if (root.prompt != nullptr)
+	if (root.prompt != nullptr) {
 		result->prompt = root.prompt;
+
+		static const std::regex in_re(R"(\{\{[A-Za-z_][A-Za-z0-9_]*\}\})");
+		auto words_begin = std::sregex_iterator(result->prompt.begin(), result->prompt.end(), in_re);
+		auto words_end = std::sregex_iterator();
+
+		for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
+			std::smatch match = *i;
+			std::string match_str = match.str();
+			auto attr = match_str.substr(2, match_str.size() - 4);		
+			
+			auto *cr = Transformer::MakePGColumnRef(attr.c_str());
+
+			auto target = PGPointerCast<duckdb_libpgquery::PGNode>(cr);
+			auto expr = TransformExpression(*target);
+			result->parsed_input_columns.push_back(std::move(expr));			
+		}
+	}
 
 	if (root.source) {
 		result->source = TransformTableRefNode(*root.source);
