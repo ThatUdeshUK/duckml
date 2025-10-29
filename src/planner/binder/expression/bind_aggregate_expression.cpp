@@ -355,15 +355,15 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 	bound_predict->result_set_names.push_back(predict.out_col_name);
 	bound_predict->result_set_types.push_back(predict.out_col_type);
 											   
-	auto result = std::make_unique<BoundPredictExpression>(predict.out_col_type, std::move(children));
-	result->bound_predict = std::move(bound_predict);
+	// auto result = std::make_unique<BoundPredictExpression>(predict.out_col_type, std::move(children));
+	// result->bound_predict = std::move(bound_predict);
 
 	vector<reference<ModelCatalogEntry>> entries;
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::MODEL_ENTRY, [&](CatalogEntry &entry) {
 			auto &item = entry.Cast<ModelCatalogEntry>();
-			if (item.name == result->bound_predict->model_name) {
+			if (item.name == bound_predict->model_name) {
 				entries.push_back(item);
 			}
 		});
@@ -371,33 +371,57 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 
 	if (entries.empty()) {
 		throw BinderException("Model with name \"%s\" does not exist in calatog!",
-				    		   result->bound_predict->model_name.c_str());
+				    		   bound_predict->model_name.c_str());
 	}
 
 	auto &stored_model = entries[0].get();
 	auto stored_model_data = stored_model.GetData();
-	result->bound_predict->model_type = stored_model_data.model_type;
-	result->bound_predict->model_path = stored_model_data.model_path;
-	result->bound_predict->base_api = stored_model_data.base_api;
-	result->bound_predict->secret = stored_model_data.secret;
+	// result->bound_predict->model_type = stored_model_data.model_type;
+	// result->bound_predict->model_path = stored_model_data.model_path;
+	// result->bound_predict->base_api = stored_model_data.base_api;
+	// result->bound_predict->secret = stored_model_data.secret;
+
+	QueryErrorContext error_context(predict.GetQueryLocation());
+	EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, "llm_agg", error_context);
+	auto cat_entry = binder.GetCatalogEntry("duckdb", "main", function_lookup, OnEntryNotFound::RETURN_NULL);
+	if (!cat_entry) {
+		error.AddQueryLocation(predict);
+		error.Throw();
+	}
+	auto &func = cat_entry->Cast<AggregateFunctionCatalogEntry>();
+
+	// bind the aggregate
+	FunctionBinder function_binder(binder);
+	vector<LogicalType> types = {LogicalType(LogicalTypeId::VARCHAR)};
+	auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
+	if (!best_function.IsValid()) {
+		error.AddQueryLocation(predict);
+		error.Throw();
+	}
+	// found a matching function!
+	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+
+
+	// FunctionBinder function_binder(binder);
+	// auto aggregate = function_binder.BindAggregatePredict(predict, std::move(children));
 
 	// FunctionBinder function_binder(binder);
 	// auto bound_function = ListFun::GetFunction();
-	// auto result = function_binder.BindAggregateFunction(bound_function, std::move(children), nullptr, AggregateType::NON_DISTINCT);
+	auto aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children), nullptr, AggregateType::NON_DISTINCT);
 
-	if (!result) {
+	if (!aggregate) {
 		error.AddQueryLocation(predict);
 		error.Throw();
 	}
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;
-	auto entry = node.aggregate_map.find(*result);
+	auto entry = node.aggregate_map.find(*aggregate);
 	if (entry == node.aggregate_map.end()) {
 		// new aggregate: insert into aggregate list
 		aggr_index = node.aggregates.size();
-		node.aggregate_map[*result] = aggr_index;
-		node.aggregates.push_back(std::move(result));
+		node.aggregate_map[*aggregate] = aggr_index;
+		node.aggregates.push_back(std::move(aggregate));
 	} else {
 		// duplicate aggregate: simplify refer to this aggregate
 		aggr_index = entry->second;

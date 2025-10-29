@@ -12,6 +12,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/parser/expression/predict_expression.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -72,6 +73,9 @@ public:
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
 	                                           const vector<unique_ptr<Expression>> &groups);
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
+
+	DUCKDB_API unique_ptr<BoundAggregateExpression>
+	BindAggregatePredict(PredictExpression &expr, vector<unique_ptr<Expression>> children);
 
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);

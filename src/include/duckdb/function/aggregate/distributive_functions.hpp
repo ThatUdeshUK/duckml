@@ -35,6 +35,16 @@ struct CountFun {
 	static AggregateFunctionSet GetFunctions();
 };
 
+struct LlmAggFun {
+	static constexpr const char *Name = "llm_agg";
+	static constexpr const char *Parameters = "arg";
+	static constexpr const char *Description = "Returns the semantically aggregated value.";
+	static constexpr const char *Example = "llm_agg(A)";
+	static constexpr const char *Categories = "";
+
+	static AggregateFunctionSet GetFunctions();
+};
+
 struct FirstFun {
 	static constexpr const char *Name = "first";
 	static constexpr const char *Parameters = "arg";

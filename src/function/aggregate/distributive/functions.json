@@ -14,6 +14,13 @@
         "type": "aggregate_function_set"
     },
     {
+        "name": "llm_agg",
+        "parameters": "arg",
+        "description": "Returns the semantically aggregated value.",
+        "example": "llm_agg(A)",
+        "type": "aggregate_function_set"
+    },
+    {
         "name": "first",
         "parameters": "arg",
         "description": "Returns the first value (null or non-null) from arg. This function is affected by ordering.",

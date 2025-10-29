@@ -251,7 +251,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 				break;
 			}
 		} else if (expression->type == ExpressionType::PREDICT) {
-			can_use_simple_aggregation = false;
+			can_use_simple_aggregation = true;
 			semantic_agg = true;
 		}
 	}
@@ -275,7 +275,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	// use a partitioned or perfect hash aggregate if possible
 	vector<column_t> partition_columns;
 	vector<idx_t> required_bits;
-	if (can_use_simple_aggregation && CanUsePartitionedAggregate(context, op, plan, partition_columns)) {
+	if (!semantic_agg && can_use_simple_aggregation && CanUsePartitionedAggregate(context, op, plan, partition_columns)) {
 		auto &group_by =
 		    Make<PhysicalPartitionedAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 		                                       std::move(partition_columns), op.estimated_cardinality);

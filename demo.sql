@@ -31,6 +31,9 @@ JOIN Orders AS o
 ON o.customer_id = c.customer_id
 GROUP BY state;
 
+SELECT state, address
+FROM LLM o4mini (PROMPT 'extract the {state VARCHAR} from the {{ADDRESS}}', Customer);
+
 SELECT sum(total_amount)
 FROM Customer AS c
 JOIN Orders AS o
@@ -120,3 +123,6 @@ FROM LLM ("{reason VARCHAR} and {is_negative BOOLEAN} of the review", Reviews)
 WHERE is_negative;
 
 SELECT category_id, LLM AGG o4mini (PROMPT 'what is the computer {component VARCHAR} from the {{description}}') FROM Product GROUP BY category_id;
+
+SELECT LLM AGG o4mini (PROMPT 'Generate {summary VARCHAR} from {{description}}') FROM Product;
+-- D SELECT p.category_id, avg(p.price) FROM Product AS p GROUP BY p.category_id;
