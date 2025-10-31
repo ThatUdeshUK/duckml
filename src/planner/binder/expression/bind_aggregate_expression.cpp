@@ -5,6 +5,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/function/aggregate/llm_agg_helpers.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -347,16 +348,13 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 		children.push_back(std::move(child));
 	}
 
-	auto bound_predict = std::make_unique<BoundPredictInfo>();
+	auto bound_predict = make_uniq<BoundPredictInfo>();
 	bound_predict->model_name = predict.model_name;
 	bound_predict->prompt = predict.prompt;
 	bound_predict->input_set_names = std::move(predict.input_col_names);
 	bound_predict->input_set_types = std::move(child_types);
 	bound_predict->result_set_names.push_back(predict.out_col_name);
 	bound_predict->result_set_types.push_back(predict.out_col_type);
-											   
-	// auto result = std::make_unique<BoundPredictExpression>(predict.out_col_type, std::move(children));
-	// result->bound_predict = std::move(bound_predict);
 
 	vector<reference<ModelCatalogEntry>> entries;
 	auto schemas = Catalog::GetAllSchemas(context);
@@ -376,14 +374,14 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 
 	auto &stored_model = entries[0].get();
 	auto stored_model_data = stored_model.GetData();
-	// result->bound_predict->model_type = stored_model_data.model_type;
-	// result->bound_predict->model_path = stored_model_data.model_path;
-	// result->bound_predict->base_api = stored_model_data.base_api;
-	// result->bound_predict->secret = stored_model_data.secret;
+	bound_predict->model_type = stored_model_data.model_type;
+	bound_predict->model_path = stored_model_data.model_path;
+	bound_predict->base_api = stored_model_data.base_api;
+	bound_predict->secret = stored_model_data.secret;
 
 	QueryErrorContext error_context(predict.GetQueryLocation());
 	EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, "llm_agg", error_context);
-	auto cat_entry = binder.GetCatalogEntry("duckdb", "main", function_lookup, OnEntryNotFound::RETURN_NULL);
+	auto cat_entry = binder.GetCatalogEntry("", "", function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!cat_entry) {
 		error.AddQueryLocation(predict);
 		error.Throw();
@@ -392,8 +390,7 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 
 	// bind the aggregate
 	FunctionBinder function_binder(binder);
-	vector<LogicalType> types = {LogicalType(LogicalTypeId::VARCHAR)};
-	auto best_function = function_binder.BindFunction(func.name, func.functions, types, error);
+	auto best_function = function_binder.BindFunction(func.name, func.functions, bound_predict->result_set_types, error);
 	if (!best_function.IsValid()) {
 		error.AddQueryLocation(predict);
 		error.Throw();
@@ -401,18 +398,18 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
-
 	// FunctionBinder function_binder(binder);
-	// auto aggregate = function_binder.BindAggregatePredict(predict, std::move(children));
 
 	// FunctionBinder function_binder(binder);
 	// auto bound_function = ListFun::GetFunction();
 	auto aggregate = function_binder.BindAggregateFunction(bound_function, std::move(children), nullptr, AggregateType::NON_DISTINCT);
-
 	if (!aggregate) {
 		error.AddQueryLocation(predict);
 		error.Throw();
-	}
+	}	
+	
+	auto predict_bind = make_uniq<LlmAggBindData>(context, bound_predict);
+	aggregate->bind_info = std::move(predict_bind);
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;

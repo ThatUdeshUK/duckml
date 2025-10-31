@@ -79,6 +79,7 @@ public:
 	                           int output_size) {};
 	virtual void PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, int rows,
 	                          const PredictInfo &info, unique_ptr<PredictStats> &stats) {};
+	virtual string PredictString(ClientContext &client, string &input, const PredictInfo &info) { return ""; };
 	virtual void PredictGNN(vector<float> &nodes, vector<int64_t> &edges, vector<float> &output,
 	                        unique_ptr<PredictStats> &stats) {};
 	virtual void PredictGNN(vector<float> &nodes, vector<int64_t> &edges, vector<float> &output, int64_t num_nodes,

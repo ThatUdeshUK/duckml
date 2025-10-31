@@ -74,9 +74,6 @@ public:
 	                                           const vector<unique_ptr<Expression>> &groups);
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
-	DUCKDB_API unique_ptr<BoundAggregateExpression>
-	BindAggregatePredict(PredictExpression &expr, vector<unique_ptr<Expression>> children);
-
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(SimpleFunction &function, vector<unique_ptr<Expression>> &children);
 
