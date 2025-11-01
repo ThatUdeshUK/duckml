@@ -76,13 +76,17 @@ struct LlmAggFunction {
 		std::cout << "----------- Finalize ----------" << std::endl;
 		auto state_data = FlatVector::GetData<STATE *>(states);
 		auto results = FlatVector::GetData<string_t>(result);
+		vector<string> input_strs;
 		for (idx_t i = 0; i < count; i++) {
 			auto test = state_data[i];
 			auto agg_str = test->value;
-			auto emb_str = llm_bind.info->prompt + "\n" + agg_str;
-
+			input_strs.push_back(agg_str);
+			// auto emb_str = llm_bind.info->prompt + "\n" + agg_str;
+		}
+		auto outputs = predictor->PredictString(llm_bind.context, input_strs, predict_info);
+		for (idx_t i = 0; i < count; i++) {
+			auto out = outputs[i];
 			std::cout << "idx: " << i << " :" << std::endl;
-			auto out = predictor->PredictString(llm_bind.context, agg_str, predict_info);
 			std::cout << "output: \n" << out << std::endl;
 			std::cout << "-------------------------------" << std::endl;
 			results[i] = StringVector::AddString(result, out);

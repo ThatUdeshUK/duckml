@@ -342,7 +342,53 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	std::cout << "Total time (s): " << total_time * 1.0 / 1000000 << std::endl;
 }
 
-string LlmApiPredictor::PredictString(ClientContext &client, string &input, const PredictInfo &info) {
+std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(ClientContext &client, openai::OpenAI& api, string input, const PredictInfo &info) {
+	auto result = make_uniq<BatchResult>();
+	
+	std::string llm_out {};
+
+	std::string rewritten = this->prompt + "; Consider all of the following inputs and produce a single output: \n" + input;
+	std::cout << "prompt: \n" << rewritten << std::endl; 
+
+	nlohmann::json request;
+
+	request["model"] = this->model_path;
+	auto sys_msg = R"(You are a helpful assistant. Always respond with a plain text. Do not include any explanations, given inputs or language specifiers.)";
+	request["messages"] = {
+		{{"content", sys_msg}, {"role", "system"}},
+		{{"content", rewritten}, {"role", "user"}}
+	};
+
+	auto req_ts = std::chrono::steady_clock::now();
+	auto completion = api.post("chat/completions", request);
+	auto req_te = std::chrono::steady_clock::now();
+	auto req_time = std::chrono::duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+
+	for (auto &msg : completion["choices"]) {
+		llm_out = msg["message"]["content"].get<std::string>();
+	}
+
+	int tokens = completion["usage"]["total_tokens"].get<int>();
+
+	std::cout << llm_out << "||" << std::endl;
+	result->outputs.push_back(llm_out);
+	
+	result->tokens = tokens;
+	result->predict = req_time;
+	result->is_concat = false;
+	result->n_calls = 1;
+	return std::move(result);
+}
+
+vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<string> &input, const PredictInfo &info) {
+	vector<string> output{};
+
+	std::cout << "No. agg calls: " << input.size() << std::endl;
+#if LLM_USE_THREADS
+    std::cout << "No. of threads: " << this->n_threads << std::endl;
+    std::cout << "Requests per min: " << this->req_per_min << std::endl;
+#endif
+
 #if OPT_TIMING
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 #endif
@@ -350,35 +396,43 @@ string LlmApiPredictor::PredictString(ClientContext &client, string &input, cons
 	auto &db = DatabaseInstance::GetDatabase(client);
 	auto &api = openai::start(db, base_api, secret);
 
-	std::string rewritten = this->prompt + "; Consider all of the following inputs: \n" + input;
-	std::cout << "prompt: \n" << rewritten << std::endl; 
+#if LLM_USE_THREADS
+    std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
+	size_t total_tokens = 0;
+	size_t sub_reqs = 0;
+	size_t sub_secs = 0;
 
-	std::string llm_out {};
-	nlohmann::json request;
-
-	request["model"] = this->model_path;
-	auto sys_msg = R"(You are a helpful assistant. Always respond with a plain text. Do not include any explanations or language specifiers.)";
-	request["messages"] = {
-		{{"content", sys_msg}, {"role", "system"}},
-		{{"content", rewritten}, {"role", "user"}}
-	};
-
-	auto completion = api.post("chat/completions", request);
-	for (auto &msg : completion["choices"]) {
-		llm_out = msg["message"]["content"].get<std::string>();
+	std::chrono::steady_clock::time_point b_ts = std::chrono::steady_clock::now();
+	for (size_t call = 0; call < input.size(); call++) {
+		futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictOne, this, std::ref(client), std::ref(api), input[call], std::cref(info)));
 	}
-
-	int tokens = completion["usage"]["total_tokens"].get<int>();
-	// std::cout << llm_out << "||" << std::endl;
-
-	std::cout << "Total tokens: " << tokens << std::endl;
+	size_t run = 0;
+	for (auto &f : futures) {
+		auto result = f.get();
+		sub_reqs += result->n_calls;
+		total_tokens += result->tokens;
+		output.push_back(result->outputs[0]);
+	}
+	futures.clear();
+	std::chrono::steady_clock::time_point b_te = std::chrono::steady_clock::now();
+	sub_secs += std::chrono::duration_cast<std::chrono::seconds>(b_te - b_ts).count();
+	
+#else
+	for (size_t call = 0; call < input.size(); call++) {
+		auto input_i = input[call];
+		auto result = PredictOne(client, api, input_i, info);
+		total_tokens += result->tokens;
+		output.push_back(result->outputs[0]);
+	}
+#endif
+	std::cout << "Total tokens: " << total_tokens << std::endl;
 
 #if OPT_TIMING
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 	long total_time = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 	std::cout << "Call time (s): " << total_time * 1.0 / 1000000 << std::endl;
 #endif
-	return llm_out;
+	return output;
 }
 
 void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const PredictInfo &info, unique_ptr<PredictStats> &stats) {
