@@ -39,8 +39,8 @@ struct LlmAggBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		// auto &other = other_p.Cast<LlmAggBindData>();
-		return true;
+		auto &other = other_p.Cast<LlmAggBindData>();
+		return info->Equals(*other.info.get());
 	}
 
 	ClientContext &context;

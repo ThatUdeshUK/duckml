@@ -152,6 +152,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(ClientContext &client
 		std::cout << "Prompt len: " << rewritten.size() << std::endl;
 
 		nlohmann::json request;
+
 		request["model"] = this->model_path;
 		request["messages"] = {
 			{{"content", GenerateSystemMessage(true)}, {"role", "system"}},

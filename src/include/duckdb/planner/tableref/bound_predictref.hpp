@@ -42,6 +42,11 @@ struct BoundPredictInfo {
 	//! Options
 	case_insensitive_map_t<Value> options;
 
+	bool Equals(const BoundPredictInfo &other) const {
+		return model_type == other.model_type && model_name == other.model_name &&
+		       model_path == other.model_path && prompt == other.prompt;
+	}
+
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BoundPredictInfo> Deserialize(Deserializer &deserializer);
 };
