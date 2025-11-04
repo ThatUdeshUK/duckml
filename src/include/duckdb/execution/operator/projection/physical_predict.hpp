@@ -52,7 +52,7 @@ struct PredictInfo {
 class Predictor {
 public:
 	explicit Predictor()
-	    : task(PREDICT_TABULAR_TASK), batch_size(-1), llm_max_tokens(-1), use_cache(true), use_batch(true),
+	    : task(PREDICT_TABULAR_TASK), batch_size(0), llm_max_tokens(0), use_cache(true), use_batch(true),
 	      success(false), error_message("") {
 	}
 	virtual ~Predictor() {
@@ -61,8 +61,8 @@ public:
 	PredictorTask task;
 	std::string model_path;
 
-	int batch_size;
-	int llm_max_tokens; // LLM specific
+	idx_t batch_size;
+	idx_t llm_max_tokens; // LLM specific
 	bool use_cache;
 	bool use_batch;
 

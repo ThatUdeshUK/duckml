@@ -79,7 +79,7 @@ public:
 	}
 
 	static void process_prompt_and_extract_types(std::vector<std::pair<std::string, LogicalTypeId>> &attrs,
-	                                      std::string &prompt) {
+	                                             std::string &prompt) {
 		const std::regex out_re(Prompt::OUT_REGEX, std::regex_constants::icase);
 		auto words_begin = std::sregex_iterator(prompt.begin(), prompt.end(), out_re);
 		auto words_end = std::sregex_iterator();
@@ -94,7 +94,7 @@ public:
 	}
 
 	static std::string embed_prompt(const idx_t row, const DataChunk &input, const PredictInfo &info,
-	                         const bool is_multi = false) {
+	                                const bool is_multi = false) {
 		const std::string line_end = is_multi ? "`, " : "`;\n";
 		std::stringstream ss;
 		idx_t col_i = 0;
@@ -108,8 +108,28 @@ public:
 		return ss.str();
 	}
 
-	static void extract_array_data(const std::string &llm_out, DataChunk &output, const idx_t i, const PredictInfo &info,
-	                        const bool resize = false) {
+	template <typename Func>
+	static void extract_array_data(const std::string &llm_out, DataChunk &output,
+	                               const map<string, vector<idx_t>> &unprocessed, const idx_t i,
+	                               const PredictInfo &info,
+	                               Func cache_update_func) {
+		if (auto out_json = nlohmann::json::parse(extract_json(llm_out)); out_json.is_array()) {
+			int64_t row = static_cast<int64_t>(i);
+			for (auto it = out_json.begin(); it != out_json.end(); ++it) {
+				const auto unprocessed_row = std::next(unprocessed.begin(), row);
+				cache_update_func(unprocessed_row->first, it->dump());
+				for (const auto &tuple_id : unprocessed_row->second) {
+					populate_row_data(*it, tuple_id, output, info);
+				}
+				row++;
+			}
+		} else {
+			std::cout << "JSON parse issue: Array not found" << std::endl;
+		}
+	}
+
+	static void extract_array_data(const std::string &llm_out, DataChunk &output, const idx_t i,
+	                               const PredictInfo &info, const bool resize = false) {
 		if (auto out_json = nlohmann::json::parse(extract_json(llm_out)); out_json.is_array()) {
 			if (resize)
 				output.SetCardinality(out_json.size());
@@ -123,7 +143,8 @@ public:
 		}
 	}
 
-	static void extract_row_data(const std::string &llm_out, const idx_t row, DataChunk &output, const PredictInfo &info) {
+	static void extract_row_data(const std::string &llm_out, const idx_t row, DataChunk &output,
+	                             const PredictInfo &info) {
 		try {
 			auto json_str = extract_json(llm_out);
 			const auto out_json = nlohmann::json::parse(json_str);
@@ -138,7 +159,7 @@ public:
 	}
 
 	static void populate_row_data(const nlohmann::json &out_json, const idx_t row, DataChunk &output,
-	                       const PredictInfo &info) {
+	                              const PredictInfo &info) {
 		for (size_t j = 0; j < info.result_set_names.size(); j++) {
 			auto output_type = info.result_set_types[j];
 			auto col_name = info.result_set_names[j];

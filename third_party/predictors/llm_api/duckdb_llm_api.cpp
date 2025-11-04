@@ -63,8 +63,8 @@ void LlmApiPredictor::Load(ClientContext &client, const std::string &path, uniqu
 
 	// This would be the specific model name or API URL.
 	this->model_path = path;
-	std::cout << "Model Path: " << model_path << std::endl;
-	std::cout << "Base API: " << this->base_api << std::endl;
+	std::cout << "Model Path: " << model_path << "\n";
+	std::cout << "Base API: " << this->base_api << "\n";
 
 	auto &db = DatabaseInstance::GetDatabase(client);
 	this->api = OpenAI::createInstance(db, base_api, secret);
@@ -85,7 +85,7 @@ void LlmApiPredictor::GenerateGrammar() {
 	std::stringstream ss;
 	ss << "{";
 	bool first = true;
-	for (auto [attribute, type] : attrs) {
+	for (const auto &[attribute, type] : attrs) {
 		if (!first) {
 			ss << R"(, )";
 		} else {
@@ -113,8 +113,8 @@ void LlmApiPredictor::GenerateGrammar() {
 	ss << "}";
 	this->grammar = ss.str();
 
-	std::cout << "Prompt: " << this->prompt << std::endl;
-	std::cout << "Grammar:" << this->grammar << std::endl;
+	std::cout << "Prompt: " << this->prompt << "\n";
+	std::cout << "Grammar:" << this->grammar << "\n";
 }
 
 std::string LlmApiPredictor::GenerateSystemMessage(const bool is_array) const {
@@ -128,8 +128,8 @@ std::string LlmApiPredictor::GenerateSystemMessage(const bool is_array) const {
 	       this->grammar + suffix;
 }
 
-std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, DataChunk &input, const idx_t rows, int batch,
-                                                           int batch_size, const PredictInfo &info) {
+std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const vector<string> &input,
+                                                           const idx_t rows, idx_t batch, idx_t batch_size) {
 	auto result = make_uniq<BatchResult>();
 
 	int tokens = 0;
@@ -137,19 +137,25 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, DataChun
 	idx_t frow = batch * batch_size;                // Offset of first row
 	idx_t lrow = std::min(frow + batch_size, rows); // Offset of last row
 	idx_t num_rows = lrow - frow;                   // Number of rows in the batch
+	std::cout << "Batch size: " << num_rows << "\n";
+
+	result->frow = frow;
 
 	if (use_batch) {
 		std::string llm_out {};
 
 		std::stringstream ss;
 		ss << this->prompt + "; \nRespond with a JSON object for each the following " << num_rows << " inputs:\n[";
-		for (int i = frow; i < lrow; ++i) {
-			ss << "{" << prompt_util.embed_prompt(i, input, info, true) << "},\n";
+
+		auto it_start = std::next(input.begin(), frow);
+		auto it_end = lrow < rows ? std::next(input.begin(), lrow) : input.end();
+		for (auto it = it_start; it != it_end; ++it) {
+			ss << "{" << *it << "},\n";
 		}
 		ss << "]";
 
 		std::string rewritten = ss.str();
-		std::cout << "Prompt len: " << rewritten.size() << std::endl;
+		std::cout << "Prompt len: " << rewritten.size() << "\n";
 
 		nlohmann::json request;
 
@@ -161,11 +167,11 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, DataChun
 		auto completion = api.post("chat/completions", request);
 		auto req_te = steady_clock::now();
 		auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
-		std::cout << "Batch request time (s):" << req_time << std::endl;
+		std::cout << "Batch request time (s):" << req_time << "\n";
 		if (completion.contains("error")) {
-			std::cout << "Batch call failed! Falling back to rowise calls. Error: " << completion["error"] << std::endl;
+			std::cout << "Batch call failed! Falling back to rowise calls. Error: " << completion["error"] << "\n";
 			if (completion["code"] == 429) {
-				std::cout << "Wait because too much requests!" << std::endl;
+				std::cout << "Wait because too much requests!" << "\n";
 				std::this_thread::sleep_for(std::chrono::seconds(30));
 			}
 		} else {
@@ -174,7 +180,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, DataChun
 			for (auto &msg : completion["choices"]) {
 				llm_out = msg["message"]["content"].get<std::string>();
 			}
-			std::cout << llm_out << "||" << std::endl;
+			std::cout << llm_out << "||" << "\n";
 
 			result->outputs.push_back(llm_out);
 			result->tokens = tokens;
@@ -185,50 +191,39 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, DataChun
 		}
 	}
 
-	long total_time = 0;
-	for (int i = frow; i < lrow; ++i) {
+	int64_t total_time = 0;
+	for (auto &embedded : input) {
 		std::string llm_out {};
 
-		if (const std::string embedded = prompt_util.embed_prompt(i, input, info);
-		    use_cache && this->cache.find(embedded) != this->cache.end()) {
-			std::cout << "Cache hit!" << std::endl;
-			llm_out = this->cache[embedded];
-		} else {
-			std::string rewritten = this->prompt + ";\n" + embedded;
+		std::string rewritten = this->prompt + ";\n" + embedded;
 
-			nlohmann::json request;
-			request["model"] = this->model_path;
-			request["messages"] = {{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
-			                       {{"content", rewritten}, {"role", "user"}}};
-			// request["max_tokens"] = 64;
-			// request["temperature"] = 0;
+		nlohmann::json request;
+		request["model"] = this->model_path;
+		request["messages"] = {{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
+		                       {{"content", rewritten}, {"role", "user"}}};
 
-			auto req_ts = steady_clock::now();
-			auto completion = api.post("chat/completions", request);
-			auto req_te = steady_clock::now();
-			auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
-			std::cout << "Request time (s):" << req_time << std::endl;
-			if (completion.contains("error")) {
-				std::cout << "LLM call failed! Error: " << completion["error"] << std::endl;
-				if (completion["code"] == 429) {
-					std::cout << "Wait because too much requests!" << std::endl;
-					std::this_thread::sleep_for(std::chrono::seconds(30));
-				}
-				result->outputs.push_back("");
-				continue;
+		auto req_ts = steady_clock::now();
+		auto completion = api.post("chat/completions", request);
+		auto req_te = steady_clock::now();
+		auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+		std::cout << "Request time (s):" << req_time << "\n";
+		if (completion.contains("error")) {
+			std::cout << "LLM call failed! Error: " << completion["error"] << "\n";
+			if (completion["code"] == 429) {
+				std::cout << "Wait because too much requests!" << "\n";
+				std::this_thread::sleep_for(std::chrono::seconds(30));
 			}
-			total_time += req_time;
-			tokens += completion["usage"]["total_tokens"].get<int>();
-
-			for (auto &msg : completion["choices"]) {
-				llm_out = msg["message"]["content"].get<std::string>();
-			}
-
-			std::string cache_out = llm_out;
-			if (use_cache)
-				this->cache[embedded] = std::move(cache_out);
+			result->outputs.emplace_back("");
+			continue;
 		}
-		std::cout << llm_out << "||" << std::endl;
+		total_time += req_time;
+		tokens += completion["usage"]["total_tokens"].get<int>();
+
+		for (auto &msg : completion["choices"]) {
+			llm_out = msg["message"]["content"].get<std::string>();
+		}
+
+		std::cout << llm_out << "||" << "\n";
 		result->outputs.push_back(llm_out);
 	}
 	result->tokens = tokens;
@@ -252,48 +247,87 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, DataChun
  */
 void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
                                    const PredictInfo &info, unique_ptr<PredictStats> &stats) {
-	std::cout << "No. tuples: " << rows << std::endl;
+	std::cout << "No. tuples: " << rows << "\n";
 #if LLM_USE_THREADS
-	std::cout << "No. of threads: " << this->n_threads << std::endl;
-	std::cout << "Requests per min: " << this->req_per_min << std::endl;
+	std::cout << "No. of threads: " << this->n_threads << "\n";
+	std::cout << "Requests per min: " << this->req_per_min << "\n";
 #endif
-
-	int rounds = rows / batch_size;
-	if (rows % batch_size != 0)
-		rounds++;
-
-	if (use_batch)
-		std::cout << "Batch Size: " << batch_size << ", Rounds: " << rounds << std::endl;
 
 #if OPT_TIMING
 	const steady_clock::time_point begin = steady_clock::now();
 #endif
 
 #if LLM_USE_THREADS
+
+	map<string, vector<idx_t>> tuple_id_map {};
+	vector<string> unprocessed {};
+	for (idx_t i = 0; i < rows; ++i) {
+		const auto embedded = prompt_util.embed_prompt(i, input, info, true);
+		if (auto hit = this->cache.find(embedded); this->use_cache && hit != this->cache.end()) {
+			prompt_util.extract_row_data(hit->second, i, output, info);
+		} else if (this->use_cache) {
+			tuple_id_map[embedded].push_back(i);
+		} else {
+			unprocessed.push_back(embedded);
+		}
+	}
+
+	if (this->use_cache) {
+		for (auto &[embedding, tuple_ids] : tuple_id_map) {
+			unprocessed.push_back(embedding);
+		}
+	}
+
+	const idx_t unprocessed_rows = unprocessed.size();
+	idx_t rounds = unprocessed_rows / batch_size;
+	if (unprocessed_rows % batch_size != 0) {
+		rounds++;
+	}
+
+	if (use_batch) {
+		std::cout << "Max Batch Size: " << batch_size << ", Rounds: " << rounds << "\n";
+	}
+
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
 	size_t total_tokens = 0;
 	size_t sub_reqs = 0;
 	size_t sub_secs = 0;
 	for (size_t batch = 0; batch < rounds; batch = batch + n_threads) {
 		steady_clock::time_point b_ts = steady_clock::now();
-		for (size_t run = 0; run < n_threads && (batch + run) * batch_size < rows; run++) {
-			int batch_i = batch + run;
+		for (size_t run = 0; run < n_threads && (batch + run) * batch_size < unprocessed_rows; run++) {
+			idx_t batch_i = batch + run;
 			futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictBatch, this, std::ref(*api.get()),
-			                             std::ref(input), rows, batch_i, batch_size, std::cref(info)));
+			                             std::ref(unprocessed), unprocessed_rows, batch_i, batch_size));
 		}
 		size_t run = 0;
 		for (auto &f : futures) {
-			const int frow = (batch + run) * batch_size;
 			const auto result = f.get();
+			const idx_t frow = result->frow;
 			sub_reqs += result->n_calls;
 			total_tokens += result->tokens;
 			if (result->is_concat) {
-				prompt_util.extract_array_data(result->outputs[0], output, frow, info);
+				if (this->use_cache) {
+					prompt_util.extract_array_data(result->outputs[0], output, tuple_id_map, frow, info,
+												   [this](const string &embedded, const string &llm_out) {
+													   cache[embedded] = llm_out;
+												   });
+				} else {
+					prompt_util.extract_array_data(result->outputs[0], output, frow, info);
+				}
 			} else {
 				const auto n_rows = result->outputs.size();
 				for (size_t i = 0; i < n_rows; i++) {
-					prompt_util.extract_row_data(result->outputs[i], frow + i, output, info);
-				}
+					const auto unprocessed_idx = frow + i;
+					if (this->use_cache) {
+						const auto unprocessed_row = std::next(tuple_id_map.begin(), unprocessed_idx);
+						this->cache[unprocessed_row->first] = result->outputs[i];
+						for (const auto &tuple_id : unprocessed_row->second) {
+							prompt_util.extract_row_data(result->outputs[i], tuple_id, output, info);
+						}
+					} else {
+						prompt_util.extract_row_data(result->outputs[i], unprocessed_idx, output, info);
+					}
+				}/**/
 			}
 			run++;
 		}
@@ -316,24 +350,24 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		}
 	}
 #endif
-	std::cout << "Total tokens: " << total_tokens << std::endl;
+	std::cout << "Total tokens: " << total_tokens << "\n";
 
 #if OPT_TIMING
 	const steady_clock::time_point end = steady_clock::now();
-	const long total_time = duration_cast<std::chrono::microseconds>(end - begin).count();
+	const int64_t total_time = duration_cast<std::chrono::microseconds>(end - begin).count();
 	stats->predict += total_time;
 #endif
-	std::cout << "Total time (s): " << total_time * 1.0 / 1000000 << std::endl;
+	std::cout << "Total time (s): " << total_time * 1.0 / 1000000 << "\n";
 }
 
-std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const string &input, const PredictInfo &/*info*/) {
+std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const string &input) {
 	auto result = make_uniq<BatchResult>();
 
 	std::string llm_out {};
 
 	std::string rewritten =
 	    this->prompt + "; Consider all of the following inputs and produce a single output: \n" + input;
-	std::cout << "prompt: \n" << rewritten << std::endl;
+	std::cout << "prompt: \n" << rewritten << "\n";
 
 	nlohmann::json request;
 
@@ -351,7 +385,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 		llm_out = msg["message"]["content"].get<std::string>();
 	}
 
-	std::cout << llm_out << "||" << std::endl;
+	std::cout << llm_out << "||" << "\n";
 	result->outputs.push_back(llm_out);
 
 	result->tokens = completion["usage"]["total_tokens"].get<int>();
@@ -364,10 +398,10 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<string> &input, const PredictInfo &info) {
 	vector<string> output {};
 
-	std::cout << "No. agg calls: " << input.size() << std::endl;
+	std::cout << "No. agg calls: " << input.size() << "\n";
 #if LLM_USE_THREADS
-	std::cout << "No. of threads: " << this->n_threads << std::endl;
-	std::cout << "Requests per min: " << this->req_per_min << std::endl;
+	std::cout << "No. of threads: " << this->n_threads << "\n";
+	std::cout << "Requests per min: " << this->req_per_min << "\n";
 #endif
 
 #if OPT_TIMING
@@ -381,9 +415,10 @@ vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<stri
 	size_t sub_secs = 0;
 
 	const steady_clock::time_point b_ts = steady_clock::now();
+	futures.reserve(input.size());
 	for (size_t call = 0; call < input.size(); call++) {
-		futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictOne, this, std::ref(*api.get()), input[call],
-		                             std::cref(info)));
+		futures.push_back(
+		    std::async(std::launch::async, &LlmApiPredictor::PredictOne, this, std::ref(*api.get()), input[call]));
 	}
 	for (auto &f : futures) {
 		const auto result = f.get();
@@ -403,12 +438,12 @@ vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<stri
 		output.push_back(result->outputs[0]);
 	}
 #endif
-	std::cout << "Total tokens: " << total_tokens << std::endl;
+	std::cout << "Total tokens: " << total_tokens << "\n";
 
 #if OPT_TIMING
 	const steady_clock::time_point end = steady_clock::now();
-	const long total_time = duration_cast<std::chrono::microseconds>(end - begin).count();
-	std::cout << "Call time (s): " << total_time * 1.0 / 1000000 << std::endl;
+	const int64_t total_time = duration_cast<std::chrono::microseconds>(end - begin).count();
+	std::cout << "Call time (s): " << total_time * 1.0 / 1000000 << "\n";
 #endif
 	return output;
 }
@@ -435,17 +470,17 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	}
 
 	const int tokens = completion["usage"]["total_tokens"].get<int>();
-	std::cout << llm_out << "||" << std::endl;
+	std::cout << llm_out << "||" << '\n';
 
-	std::cout << "Total tokens: " << tokens << std::endl;
+	std::cout << "Total tokens: " << tokens << '\n';
 
 	prompt_util.extract_array_data(llm_out, output, 0, info, true);
 
 #if OPT_TIMING
 	const steady_clock::time_point end = steady_clock::now();
-	const long total_time = duration_cast<std::chrono::microseconds>(end - begin).count();
+	const int64_t total_time = duration_cast<std::chrono::microseconds>(end - begin).count();
 	stats->predict += total_time;
-	std::cout << "Total time (s): " << total_time * 1.0 / 1000000 << std::endl;
+	std::cout << "Total time (s): " << total_time * 1.0 / 1000000 << "\n";
 
 	stats->move_rev = 0;
 #endif
