@@ -1,7 +1,6 @@
 #include "duckdb_llama_cpp.hpp"
 
 #include "duckdb/main/extension_helper.hpp"
-#include "PerfEvent.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -16,7 +15,8 @@
 
 namespace duckdb {
 LlamaCppPredictor::LlamaCppPredictor(std::string prompt)
-    : Predictor(), prompt(std::move(prompt)) {
+    : n_gl(0), n_predict(0), prompt(std::move(prompt)), is_api(false), model(nullptr), vocab(nullptr), grmr(nullptr),
+      chain(nullptr) {
 }
 
 /**
@@ -25,29 +25,27 @@ LlamaCppPredictor::LlamaCppPredictor(std::string prompt)
  *
  * Called only once per query before LlamaCppPredictor::Load() is being called.
  *
- * @param client_config contains default or manually set configs.
+ * @param config contains default or manually set configs.
  * @param options map of overrides for the client configs set when model is uploaded.
  */
-void LlamaCppPredictor::Config(const ClientConfig &client_config, const case_insensitive_map_t<Value> &options) {
-	this->batch_size = (options.find("batch_size") != options.end()) ? IntegerValue::Get(options.at("batch_size"))
-	                                                                 : client_config.ml_batch_size;
-	this->llm_max_tokens = (options.find("llm_max_tokens") != options.end())
+void LlamaCppPredictor::Config(const ClientConfig &config, const case_insensitive_map_t<Value> &options) {
+	this->batch_size = options.find("batch_size") != options.end() ? IntegerValue::Get(options.at("batch_size"))
+	                                                               : config.ml_batch_size;
+	this->llm_max_tokens = options.find("llm_max_tokens") != options.end()
 	                           ? IntegerValue::Get(options.at("llm_max_tokens"))
-	                           : client_config.llm_max_tokens;
-	this->use_cache = (options.find("use_cache") != options.end()) ? BooleanValue::Get(options.at("use_cache"))
-	                                                                 : client_config.llm_use_cache;
-	this->use_batch = (options.find("use_batch") != options.end())
-	                           ? BooleanValue::Get(options.at("use_batch"))
-	                           : client_config.llm_use_batch;
+	                           : config.llm_max_tokens;
+	this->use_cache =
+	    options.find("use_cache") != options.end() ? BooleanValue::Get(options.at("use_cache")) : config.llm_use_cache;
+	this->use_batch =
+	    options.find("use_batch") != options.end() ? BooleanValue::Get(options.at("use_batch")) : config.llm_use_batch;
 
 	// Disable llama logging
 	llama_log_set(
 	    [](ggml_log_level /*level*/, const char * /*text*/, void * /*user_data*/) {
 		    // noop
 	    },
-	    NULL);
+	    nullptr);
 
-	// TODO: Implement any configurations here.
 	this->n_gl = 99;
 	this->n_predict = 256;
 }
@@ -57,12 +55,13 @@ void LlamaCppPredictor::Config(const ClientConfig &client_config, const case_ins
  *
  * Called only once per query before LlamaCppPredictor::PredictChunk() calls.
  *
+ * @param context client context of the execution
  * @param model_path path of the model set in `CREATE MODEL`.
  * @param stats statistics for profiling. Method should update `load` with the time this method use.
  */
-void LlamaCppPredictor::Load(const std::string &model_path, unique_ptr<PredictStats> &stats) {
+void LlamaCppPredictor::Load(ClientContext &context, const std::string &model_path, unique_ptr<PredictStats> &stats) {
 #if OPT_TIMING
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+	const steady_clock::time_point begin = steady_clock::now();
 #endif
 	D_ASSERT(this->task == PredictorTask::PREDICT_LLM_TASK);
 
@@ -75,7 +74,7 @@ void LlamaCppPredictor::Load(const std::string &model_path, unique_ptr<PredictSt
 	model_params.vocab_only = false;
 
 	this->model = llama_model_load_from_file(model_path.c_str(), model_params);
-	if (this->model == NULL) {
+	if (this->model == nullptr) {
 		throw InternalException("Unable to load model: " + model_path);
 	}
 
@@ -86,7 +85,7 @@ void LlamaCppPredictor::Load(const std::string &model_path, unique_ptr<PredictSt
 	InitializeSampler();
 
 #if OPT_TIMING
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	const steady_clock::time_point end = steady_clock::now();
 	stats->load = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 #endif
 }
@@ -103,15 +102,15 @@ void LlamaCppPredictor::GenerateGrammar() {
 
 	std::stringstream ss;
 	bool first = true;
-	for (auto attr : attrs) {
+	for (auto [attribute, type] : attrs) {
 		if (!first) {
 			ss << R"("," )";
 		} else {
 			first = false;
 		}
 
-		ss << R"( ws "\")" << attr.first;
-		switch (attr.second) {
+		ss << R"( ws "\")" << attribute;
+		switch (type) {
 		case LogicalTypeId::VARCHAR:
 			ss << rule_base_str;
 			break;
@@ -161,23 +160,22 @@ void LlamaCppPredictor::InitializeSampler() {
 	this->grmr = llama_sampler_init_grammar(this->vocab, this->grammar.c_str(), "root");
 	this->chain = llama_sampler_chain_init(lparams);
 
-	std::vector<llama_logit_bias> logit_bias; // logit biases to apply
+	const std::vector<llama_logit_bias> logit_bias; // logit biases to apply
 	llama_sampler_chain_add(this->chain, llama_sampler_init_logit_bias(llama_vocab_n_tokens(this->vocab),
 	                                                                   logit_bias.size(), logit_bias.data()));
 
-	int32_t penalty_last_n = 64;
-	float penalty_repeat = 1.00f;
-	float penalty_freq = 0.00f;
-	float penalty_present = 0.00f;
+	constexpr int32_t penalty_last_n = 64;
+	constexpr float penalty_repeat = 1.00f;
+	constexpr float penalty_freq = 0.00f;
+	constexpr float penalty_present = 0.00f;
 	llama_sampler_chain_add(
 	    this->chain, llama_sampler_init_penalties(penalty_last_n, penalty_repeat, penalty_freq, penalty_present));
 
-	float dry_multiplier = 0.0f; // 0.0 = disabled;      DRY repetition penalty for tokens extending repetition:
-	float dry_base =
-	    1.75f; // 0.0 = disabled;      multiplier * base ^ (length of sequence before token - allowed length)
-	int32_t dry_allowed_length = 2;  // tokens extending repetitions beyond this receive penalty
-	int32_t dry_penalty_last_n = -1; // how many tokens to scan for repetitions (0 = disable penalty, -1 = context size)
-	std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"}; // default sequence breakers for DRY
+	constexpr float dry_multiplier = 0.0f; // 0.0 = disabled; DRY repetition penalty for tokens extending repetition:
+	constexpr float dry_base = 1.75f; // 0.0 = disabled; multiplier * base ^ (len of seq before token - allowed length)
+	constexpr int32_t dry_allowed_length = 2;  // tokens extending repetitions beyond this receive penalty
+	constexpr int32_t dry_penalty_last_n = -1; // # tokens to scan for reps (0 = disable penalty, -1 = context size)
+	const std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"}; // default sequence breakers for DRY
 	std::vector<const char *> c_breakers;
 	c_breakers.reserve(dry_sequence_breakers.size());
 	for (const auto &str : dry_sequence_breakers) {
@@ -188,27 +186,28 @@ void LlamaCppPredictor::InitializeSampler() {
 	                                               dry_base, dry_allowed_length, dry_penalty_last_n, c_breakers.data(),
 	                                               c_breakers.size()));
 
-	int32_t top_k = 40;
+	constexpr int32_t top_k = 40;
 	llama_sampler_chain_add(this->chain, llama_sampler_init_top_k(top_k));
 
-	int32_t min_keep = 0; // 0 = disabled, otherwise samplers should return at least min_keep tokens
-	float typ_p = 1.00f;  // typical_p, 1.0 = disabled
+	constexpr int32_t min_keep = 0; // 0 = disabled, otherwise samplers should return at least min_keep tokens
+	constexpr float typ_p = 1.00f;  // typical_p, 1.0 = disabled
 	llama_sampler_chain_add(this->chain, llama_sampler_init_typical(typ_p, min_keep));
 
-	float top_p = 0.95f; // 1.0 = disabled
+	constexpr float top_p = 0.95f; // 1.0 = disabled
 	llama_sampler_chain_add(this->chain, llama_sampler_init_top_p(top_p, min_keep));
 
-	float min_p = 0.05f; // 0.0 = disabled
+	constexpr float min_p = 0.05f; // 0.0 = disabled
 	llama_sampler_chain_add(this->chain, llama_sampler_init_min_p(min_p, min_keep));
 
-	float xtc_probability = 0.00f; // 0.0 = disabled
-	float xtc_threshold = 0.10f;   // > 0.5 disables XTC
+	constexpr float xtc_probability = 0.00f; // 0.0 = disabled
+	constexpr float xtc_threshold = 0.10f;   // > 0.5 disables XTC
 	llama_sampler_chain_add(this->chain,
 	                        llama_sampler_init_xtc(xtc_probability, xtc_threshold, min_keep, LLAMA_DEFAULT_SEED));
 
-	float temp = 0.80f;              // <= 0.0 to sample greedily, 0.0 to not output probabilities
-	float dynatemp_range = 0.00f;    // 0.0 = disabled
-	float dynatemp_exponent = 1.00f; // controls how entropy maps to temperature in dynamic temperature sampler
+	constexpr float temp = 0.80f;           // <= 0.0 to sample greedily, 0.0 to not output probabilities
+	constexpr float dynatemp_range = 0.00f; // 0.0 = disabled
+	constexpr float dynatemp_exponent =
+	    1.00f; // controls how entropy maps to temperature in dynamic temperature sampler
 	llama_sampler_chain_add(this->chain, llama_sampler_init_temp_ext(temp, dynatemp_range, dynatemp_exponent));
 
 	llama_sampler_chain_add(this->chain, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
@@ -217,7 +216,7 @@ void LlamaCppPredictor::InitializeSampler() {
 std::string generate(llama_model *model, const llama_vocab *vocab, llama_sampler *grmr, llama_sampler *chain,
                      const std::string &prompt, const int n_predict) {
 	std::string response;
-	const int n_prompt = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), NULL, 0, true, true);
+	const int n_prompt = -llama_tokenize(vocab, prompt.c_str(), prompt.size(), nullptr, 0, true, true);
 
 	// allocate space for the tokens and tokenize the prompt
 	std::vector<llama_token> prompt_tokens(n_prompt);
@@ -281,8 +280,7 @@ std::string generate(llama_model *model, const llama_vocab *vocab, llama_sampler
 
 			llama_sampler_apply(grmr, &single_token_data_array);
 
-			const bool is_valid = single_token_data_array.data[0].logit != -INFINITY;
-			if (is_valid) {
+			if (single_token_data_array.data[0].logit != -INFINITY) {
 				new_token_id = id;
 				found = true;
 			}
@@ -327,7 +325,7 @@ std::string generate(llama_model *model, const llama_vocab *vocab, llama_sampler
 	llama_free(ctx);
 
 	return response;
-};
+}
 
 /**
  * Infer the models for a chunk (column vectors containing tupes).
@@ -340,7 +338,7 @@ std::string generate(llama_model *model, const llama_vocab *vocab, llama_sampler
  * @param info BoundPredictInfo struct with model and operator metadata
  * @param stats statistics for profiling. Method should update `predict` with the time this method use.
  */
-void LlamaCppPredictor::PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, int rows,
+void LlamaCppPredictor::PredictChunk(ClientContext & /*client*/, DataChunk &input, DataChunk &output, idx_t rows,
                                      const PredictInfo &info, unique_ptr<PredictStats> &stats) {
 	// Implemented to support mini-batches (i.e., batch_size < vector_size).
 	// However, unless changed, batch_size == vector_size by default.
@@ -351,25 +349,22 @@ void LlamaCppPredictor::PredictChunk(ClientContext &client, DataChunk &input, Da
 
 	for (size_t batch = 0; batch < rounds; batch++) {
 #if OPT_TIMING
-		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+		steady_clock::time_point begin = steady_clock::now();
 #endif
 
-		int frow = batch * batch_size;                // Offset of first row
-		int lrow = std::min(frow + batch_size, rows); // Offset of last row
-		int num_rows = lrow - frow;                   // Number of rows in the batch
-
-		int cols = info.input_mask.size();
+		const idx_t frow = batch * batch_size;                // Offset of first row
+		const idx_t lrow = std::min(frow + batch_size, rows); // Offset of last row
 
 #if OPT_TIMING
-		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+		steady_clock::time_point end = steady_clock::now();
 		stats->move += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 
-		begin = std::chrono::steady_clock::now();
+		begin = steady_clock::now();
 #endif
 
 		for (int i = frow; i < lrow; ++i) {
 			std::string llm_out {};
-			std::string embeded = prompt_util.embed_prompt(this->prompt, i, input, info);
+			std::string embeded = prompt_util.embed_prompt(i, input, info);
 #ifdef USE_CACHE
 			if (cache.find(embeded) != cache.end()) {
 				std::cout << "Cache hit!" << std::endl;
@@ -377,7 +372,8 @@ void LlamaCppPredictor::PredictChunk(ClientContext &client, DataChunk &input, Da
 			} else {
 #endif
 				std::string rewritten = this->prompt + ";\n" + embeded;
-				// std::string rewritten = StringUtil::Format("<s>[INST] %s input=\"%s\" [/INST]", this->prompt, input_str);
+				// std::string rewritten = StringUtil::Format("<s>[INST] %s input=\"%s\" [/INST]", this->prompt,
+				// input_str);
 
 				llm_out = generate(this->model, this->vocab, this->grmr, this->chain, rewritten, this->n_predict);
 
@@ -392,42 +388,39 @@ void LlamaCppPredictor::PredictChunk(ClientContext &client, DataChunk &input, Da
 		}
 
 #if OPT_TIMING
-		end = std::chrono::steady_clock::now();
+		end = steady_clock::now();
 		stats->predict += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 
-		begin = std::chrono::steady_clock::now();
+		begin = steady_clock::now();
 #endif
 
 #if OPT_TIMING
-		end = std::chrono::steady_clock::now();
+		end = steady_clock::now();
 		stats->move_rev += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 #endif
-
-		// TODO: Calculate the accuracy metric here for the prediction and update the stats.correct and stats.total
-		// stats->correct += <no_of_positives>;
-		// stats->total += rows;
 	}
 }
 
-void LlamaCppPredictor::ScanChunk(ClientContext &client, DataChunk &output, const PredictInfo &info, unique_ptr<PredictStats> &stats) {
+void LlamaCppPredictor::ScanChunk(ClientContext &client, DataChunk &output, const PredictInfo &info,
+                                  unique_ptr<PredictStats> &stats) {
 #if OPT_TIMING
 	stats->move = 0;
-	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+	const steady_clock::time_point begin = steady_clock::now();
 #endif
 
-	std::string rewritten = this->prompt + ". Always produce a list.";
+	const std::string rewritten = this->prompt + ". Always produce a list.";
 
 	std::string llm_out {};
 	llm_out = generate(this->model, this->vocab, this->grmr, this->chain, rewritten, this->n_predict);
 
 	llama_sampler_reset(this->grmr);
 	llama_sampler_reset(this->chain);
-	
+
 	std::cout << llm_out << "||" << std::endl;
 	prompt_util.extract_array_data(llm_out, output, 0, info);
 
 #if OPT_TIMING
-	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	const steady_clock::time_point end = steady_clock::now();
 	stats->predict += std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 
 	stats->move_rev = 0;
@@ -435,4 +428,3 @@ void LlamaCppPredictor::ScanChunk(ClientContext &client, DataChunk &output, cons
 }
 
 } // namespace duckdb
- 

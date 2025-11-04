@@ -14,7 +14,7 @@ unique_ptr<TableRef> Transformer::TransformTablePredict(duckdb_libpgquery::PGPre
 	if (root.prompt != nullptr) {
 		result->prompt = root.prompt;
 
-		static const std::regex in_re(R"(\{\{[A-Za-z_][A-Za-z0-9_]*\}\})");
+		const std::regex in_re(R"(\{\{[A-Za-z_][A-Za-z0-9_]*\}\})");
 		auto words_begin = std::sregex_iterator(result->prompt.begin(), result->prompt.end(), in_re);
 		auto words_end = std::sregex_iterator();
 

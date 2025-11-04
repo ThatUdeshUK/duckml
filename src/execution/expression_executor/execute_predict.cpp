@@ -11,14 +11,13 @@
 #include "duckdb_llm_api.hpp"
 #endif
 
-
 namespace duckdb {
 
-class ExecutePredictState : public ExpressionState {
+class ExecutePredictState final : public ExpressionState {
 public:
-	ExecutePredictState(const Expression &expr, ExpressionExecutorState &root) 
-		: ExpressionState(expr, root) {
-	};
+	explicit ExecutePredictState(const Expression &expr, ExpressionExecutorState &root)
+	    : ExpressionState(expr, root), predict_info() {
+	}
 
 	~ExecutePredictState() override {
 	}
@@ -30,8 +29,8 @@ public:
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundPredictExpression &expr,
-                                                                ExpressionExecutorState &root) {
-	auto result = make_uniq<ExecutePredictState>(expr, root);
+                                                                ExpressionExecutorState &state) {
+	auto result = make_uniq<ExecutePredictState>(expr, state);
 	idx_t mask_i = 0;
 	for (auto &child : expr.children) {
 		result->AddChild(*child);
@@ -54,11 +53,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundPredi
 		auto &context = result->GetContext();
 
 		auto &secret_manager = SecretManager::Get(context);
-		auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+		const auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 
-		auto secret_entry = secret_manager.GetSecretByName(transaction, result->predict_info.secret);
-
-		if (secret_entry) {
+		if (const auto secret_entry = secret_manager.GetSecretByName(transaction, result->predict_info.secret)) {
 			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
 			api_key = kv_secret.TryGetValue("bearer_token").ToString();
 		} else {
@@ -67,9 +64,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundPredi
 	}
 
 	auto predictor = PhysicalPredict::InitPredictor(result->predict_info, api_key);
-	predictor->task = PredictorTask::PREDICT_LLM_TASK;
+	predictor->task = PREDICT_LLM_TASK;
 	result->predictor = std::move(predictor);
-	
+
 	auto stats = make_uniq<PredictStats>();
 	result->stats = std::move(stats);
 
@@ -77,46 +74,45 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundPredi
 	return std::move(result);
 }
 
-static void VerifyNullHandling(const BoundPredictExpression &expr, DataChunk &args, Vector &result) {
+static void VerifyNullHandling(const BoundPredictExpression & /*expr*/, DataChunk & /*args*/, Vector & /*result*/) {
 }
 
-void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionState *state,
-                                 const SelectionVector *sel, idx_t count, Vector &result) {
+void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionState *state, const SelectionVector *sel,
+                                 const idx_t count, Vector &result) {
 	state->intermediate_chunk.Reset();
 	auto &arguments = state->intermediate_chunk;
 
 	DataChunk input;
-    input.InitializeEmpty(state->types); // schema
-    input.SetCardinality(count);
+	input.InitializeEmpty(state->types); // schema
+	input.SetCardinality(count);
 
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 			input.data[i].Reference(arguments.data[i]);
-// #ifdef DEBUG
-// 			if (expr.children[i]->return_type.id() == LogicalTypeId::VARCHAR) {
-// 				arguments.data[i].UTFVerify(count);
-// 			}
-// #endif
+			// #ifdef DEBUG
+			// 			if (expr.children[i]->return_type.id() == LogicalTypeId::VARCHAR) {
+			// 				arguments.data[i].UTFVerify(count);
+			// 			}
+			// #endif
 		}
 	}
 	arguments.SetCardinality(count);
 	arguments.Verify();
 
-	
 	auto &pstate = state->Cast<ExecutePredictState>();
 	if (!pstate.is_loaded) {
 		auto &client_config = ClientConfig::GetConfig(*context);
 
 		pstate.predictor->Config(client_config, pstate.predict_info.options);
-		pstate.predictor->Load(pstate.predict_info.model_path, pstate.stats);
+		pstate.predictor->Load(*context, pstate.predict_info.model_path, pstate.stats);
 		pstate.is_loaded = true;
 	}
 
 	DataChunk predictions;
-    predictions.InitializeEmpty({expr.return_type}); // schema
-    predictions.SetCardinality(count);
+	predictions.InitializeEmpty({expr.return_type}); // schema
+	predictions.SetCardinality(count);
 	predictions.data[0].Reference(result);
 
 	pstate.predictor->PredictChunk(*context, input, predictions, count, pstate.predict_info, pstate.stats);

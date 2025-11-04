@@ -255,9 +255,9 @@ SinkFinalizeType PhysicalGNNPredict::Finalize(Pipeline &pipeline, Event &event, 
 		return SinkFinalizeType::READY;
 	}
 
-	int64_t feature_size = node_mask.size();
-	int64_t edge_size = edge_mask.size();
-	int out_size = (int)result_set_types.size();
+	int64_t feature_size = static_cast<int64_t>(node_mask.size());
+	int64_t edge_size = static_cast<int64_t>(edge_mask.size());
+	int out_size = static_cast<int>(result_set_types.size());
 
 	gstate.output.resize(out_size * num_nodes);
 	auto &predictor = *gstate.predictor.get();
@@ -276,7 +276,7 @@ SinkFinalizeType PhysicalGNNPredict::Finalize(Pipeline &pipeline, Event &event, 
 
 InsertionOrderPreservingMap<string> PhysicalGNNPredict::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["Type"] = EnumUtil::ToChars<ModelType>(model_type);
+	result["Type"] = EnumUtil::ToString<ModelType>(model_type);
 	result["Model Path"] = model_path;
 
 	for (const auto &item : options) {
@@ -286,7 +286,7 @@ InsertionOrderPreservingMap<string> PhysicalGNNPredict::ParamsToString() const {
 	}
 
 	SetEstimatedCardinality(result, estimated_cardinality);
-	return std::move(result);
+	return result;
 }
 
 } // namespace duckdb

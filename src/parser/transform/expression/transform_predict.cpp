@@ -46,7 +46,7 @@ unique_ptr<ParsedExpression> Transformer::TransformPredict(duckdb_libpgquery::PG
 
 	result->agg = root.agg;
 
-	static const std::regex out_re(Prompt::OUT_REGEX, std::regex_constants::icase);
+	const std::regex out_re(Prompt::OUT_REGEX, std::regex_constants::icase);
 	auto words_begin = std::sregex_iterator(result->prompt.begin(), result->prompt.end(), out_re);
 	auto words_end = std::sregex_iterator();
 
@@ -63,7 +63,7 @@ unique_ptr<ParsedExpression> Transformer::TransformPredict(duckdb_libpgquery::PG
 		n_cols++;
 	}
 
-	static const std::regex in_re(R"(\{\{([A-Za-z_][A-Za-z0-9_]*)(\.[A-Za-z_][A-Za-z0-9_]*)?\}\})");
+	const std::regex in_re(R"(\{\{([A-Za-z_][A-Za-z0-9_]*)(\.[A-Za-z_][A-Za-z0-9_]*)?\}\})");
 	words_begin = std::sregex_iterator(result->prompt.begin(), result->prompt.end(), in_re);
 	words_end = std::sregex_iterator();
 

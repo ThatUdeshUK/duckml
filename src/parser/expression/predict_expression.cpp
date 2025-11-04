@@ -10,12 +10,14 @@
 
 namespace duckdb {
 
-PredictExpression::PredictExpression() : ParsedExpression(ExpressionType::PREDICT, ExpressionClass::PREDICT) {
+PredictExpression::PredictExpression()
+    : ParsedExpression(ExpressionType::PREDICT, ExpressionClass::PREDICT), agg(false) {
 }
 
-PredictExpression::PredictExpression(const string &model_name, const string &prompt, vector<unique_ptr<ParsedExpression>> children_p)
-    : ParsedExpression(ExpressionType::PREDICT, ExpressionClass::PREDICT), model_name(model_name), 
-	  prompt(prompt), children(std::move(children_p)) {
+PredictExpression::PredictExpression(const string &model_name, const string &prompt,
+                                     vector<unique_ptr<ParsedExpression>> children_p)
+    : ParsedExpression(ExpressionType::PREDICT, ExpressionClass::PREDICT), children(std::move(children_p)),
+      model_name(model_name), prompt(prompt), agg(false) {
 }
 
 string PredictExpression::ToString() const {

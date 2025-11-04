@@ -123,7 +123,8 @@ else()
     set(DUCKDB_LINK_LIBS ${DUCKDB_LINK_LIBS} duckdb_llm_api)
   endif()
 
-  add_library(duckdb SHARED ${ALL_OBJECT_FILES})
+  add_library(duckdb SHARED ${ALL_OBJECT_FILES}
+          include/duckdb/execution/operator/projection/physical_predict_gnn.h)
 
   if(WIN32 AND NOT MINGW)
     ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)

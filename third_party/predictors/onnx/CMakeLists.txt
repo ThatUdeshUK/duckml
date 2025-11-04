@@ -10,17 +10,11 @@ set(CMAKE_CXX_STANDARD 17)
 find_library(ONNX_RUNTIME_LIB onnxruntime HINTS "$ENV{ONNX_INSTALL_PREFIX}/lib")
 message(STATUS "ORT Include Libs: ${ONNX_RUNTIME_SESSION_INCLUDE_DIRS}")
 
-find_path(UTF8PROC_INCLUDE_DIRS utf8proc.h HINTS "$ENV{UTF8PROC_INSTALL_PREFIX}/include")
-message(STATUS "UTF8LIB Include Libs: ${UTF8PROC_INCLUDE_DIRS}")
-
-find_library(UTF8PROC_LIB utf8proc HINTS "$ENV{UTF8PROC_INSTALL_PREFIX}/lib")
-message(STATUS "UTF8LIB Libs: ${UTF8PROC_LIB}")
-
 include_directories(include)
 add_library(duckdb_onnx STATIC duckdb_onnx.cpp tokenizer.cpp)
 
-target_link_libraries(duckdb_onnx PUBLIC ${ONNX_RUNTIME_LIB} ${UTF8PROC_LIB})
-target_include_directories(duckdb_onnx PUBLIC ${ONNX_RUNTIME_SESSION_INCLUDE_DIRS} ${UTF8PROC_INCLUDE_DIRS})
+target_link_libraries(duckdb_onnx PUBLIC ${ONNX_RUNTIME_LIB})
+target_include_directories(duckdb_onnx PUBLIC ${ONNX_RUNTIME_SESSION_INCLUDE_DIRS})
 
 set_target_properties(duckdb_onnx PROPERTIES EXPORT_NAME duckdb_onnx)
 

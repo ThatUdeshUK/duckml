@@ -1,17 +1,17 @@
 // The MIT License (MIT)
-// 
+//
 // Copyright (c) 2023 Olrea, Florian Dang
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -24,7 +24,7 @@
 #define OPENAI_HPP_
 
 #if OPENAI_VERBOSE_OUTPUT
-#pragma message ("OPENAI_VERBOSE_OUTPUT is ON")
+#pragma message("OPENAI_VERBOSE_OUTPUT is ON")
 #endif
 
 #include "https_client.hpp"
@@ -34,185 +34,159 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <vector>
 #include <sstream>
-#include <mutex>
-#include <cstdlib>
-#include <map>
 
-#include "../../common/nlohmann/json.hpp"  // nlohmann/json
+#include "../../common/nlohmann/json.hpp" // nlohmann/json
 
-namespace openai {
-
-namespace _detail {
+namespace duckdb {
 
 // Json alias
 using Json = nlohmann::json;
 
 // OpenAI
 class OpenAI {
-private:
-    duckdb::HTTPSUtil       http_util_ = duckdb::HTTPSUtil();
-    duckdb::HTTPHeaders     headers_;
-    std::unique_ptr<duckdb::HTTPParams> params_;
-    std::string             token_;
-    std::string base_url_;
-    std::string             organization_;
-    bool                    throw_exception_;
+	HTTPSUtil http_util_ = HTTPSUtil();
+	HTTPHeaders headers_;
+	std::unique_ptr<HTTPParams> params_;
+	std::string token_;
+	std::string base_url_;
+	bool throw_exception_;
 
 public:
-    OpenAI(duckdb::DatabaseInstance &db, const std::string& token = "", const std::string& organization = "", bool throw_exception = true, const std::string& api_base_url = "", const std::string& beta = "") 
-        : token_{token}, base_url_{api_base_url}, organization_{organization}, throw_exception_{throw_exception} {
-            if (token.empty()) {
-                if(const char* env_p = std::getenv("OPENAI_API_KEY")) {
-                    token_ = std::string{env_p};
-                }
-            }
+	explicit OpenAI(DatabaseInstance &db, const std::string &token = "", const bool throw_exception = true,
+	                const std::string &api_base_url = "")
+	    : token_ {token}, base_url_ {api_base_url}, throw_exception_ {throw_exception} {
+		if (token.empty()) {
+			if (const char *env_p = std::getenv("OPENAI_API_KEY")) {
+				token_ = std::string {env_p};
+			}
+		}
 
-            if (api_base_url.empty()) {
-                if(const char* env_p = std::getenv("OPENAI_API_BASE")) {
-                    base_url_ = std::string{env_p} + "/";
-                }
-                else {
-                    base_url_ = api_base_url;
-                }
-            }
+		if (api_base_url.empty()) {
+			if (const char *env_p = std::getenv("OPENAI_API_BASE")) {
+				base_url_ = std::string {env_p} + "/";
+			} else {
+				base_url_ = api_base_url;
+			}
+		}
 
-            duckdb::DatabaseFileOpener opener{db};
-            duckdb::FileOpenerInfo info;
-            info.file_path = base_url_;
-            params_ = http_util_.InitializeParameters(&opener, &info);
-        }
-    
-    OpenAI(const OpenAI&)               = delete;
-    OpenAI& operator=(const OpenAI&)    = delete;
-    OpenAI(OpenAI&&)                    = delete;
-    OpenAI& operator=(OpenAI&&)         = delete;
+		DatabaseFileOpener opener {db};
+		FileOpenerInfo info;
+		info.file_path = base_url_;
+		params_ = http_util_.InitializeParameters(&opener, &info);
+	}
 
-    void setToken(const std::string& token) { 
-        token_ = token; 
-        headers_.Insert("Authorization", duckdb::StringUtil::Format("Bearer %s", token_));
-    };
+	OpenAI(const OpenAI &) = delete;
+	OpenAI &operator=(const OpenAI &) = delete;
+	OpenAI(OpenAI &&) = delete;
+	OpenAI &operator=(OpenAI &&) = delete;
 
-    void setThrowException(bool throw_exception) { throw_exception_ = throw_exception; }
+	void setToken(const std::string &token) {
+		token_ = token;
+		headers_.Insert("Authorization", StringUtil::Format("Bearer %s", token_));
+	}
 
-    Json post(const std::string& suffix, const std::string& data, const std::string& contentType) {
-        // Unclear what's peculiar about extension install flow, but those two parameters are needed
-        // to avoid lengthy retry on 304
-        params_->follow_location = false;
-        params_->keep_alive = false;
+	void setThrowException(const bool throw_exception) {
+		throw_exception_ = throw_exception;
+	}
 
-        auto url = base_url_ + suffix;
-        #if OPENAI_VERBOSE_OUTPUT
-            std::cout << "<< request: "<< url << "  " << data << '\n';
-        #endif
+	Json post(const std::string &suffix, const std::string &data) {
+		// Unclear what's peculiar about extension install flow, but those two parameters are needed
+		// to avoid lengthy retry on 304
+		params_->follow_location = false;
+		params_->keep_alive = false;
 
-        duckdb::PostRequestInfo post_request(url, headers_, *params_, duckdb::const_data_ptr_cast(data.c_str()), data.size());
-        post_request.try_request = true;
+		auto url = base_url_ + suffix;
+#if OPENAI_VERBOSE_OUTPUT
+		std::cout << "<< request: " << url << "  " << data << '\n';
+#endif
 
-        auto response = http_util_.Request(post_request);
-        if (!response->Success()) {
-            if (response->HasRequestError()) {
-                // request error - this means something went wrong performing the request
-                // throw duckdb::IOException("Failed call LLM at URL \"%s\"\n (ERROR %s)", url,
-                //                            response->GetRequestError());
-                Json out{};
-                out["error"] = response->GetRequestError();
-                out["code"] = -1;
-                return out;
-            }
-            // // if this was not a request error this means the server responded - report the response status and response
-            // throw duckdb::HTTPException(*response, "Failed to call LLM at URL \"%s\" (HTTP %n) - %s: Request: %s\n",
-            //                             url, int(response->status), response->reason, data);
-            Json out{};
-            out["error"] = response->reason;
-            out["code"] = int(response->status);
-            return out;
-        }
+		PostRequestInfo post_request(url, headers_, *params_, const_data_ptr_cast(data.c_str()),
+		                                     data.size());
+		post_request.try_request = true;
 
-        Json json{};
-        if (isJson(post_request.buffer_out)){
-            json = Json::parse(post_request.buffer_out); 
-        } else {
-          #if OPENAI_VERBOSE_OUTPUT
-            std::cerr << "Response is not a valid JSON";
-            std::cout << "<< " << response.text << "\n";
-          #endif
-        }
-       
-        return json;
-    }
+		auto response = http_util_.Request(post_request);
+		if (!response->Success()) {
+			if (response->HasRequestError()) {
+				Json out {};
+				out["error"] = response->GetRequestError();
+				out["code"] = -1;
+				return out;
+			}
+			Json out {};
+			out["error"] = response->reason;
+			out["code"] = response->status;
+			return out;
+		}
 
-    Json post(const std::string& suffix, const Json& json, const std::string& contentType="application/json") {
-        return post(suffix, json.dump(), contentType);
-    }
+		Json json {};
+		if (isJson(post_request.buffer_out)) {
+			json = Json::parse(post_request.buffer_out);
+		} else {
+#if OPENAI_VERBOSE_OUTPUT
+			std::cerr << "Response is not a valid JSON";
+			std::cout << "<< " << response.text << "\n";
+#endif
+		}
 
-    void debug() const { std::cout << token_ << '\n'; }
+		return json;
+	}
 
-    void setBaseUrl(const std::string &url) {
-        base_url_ = url;
-    }
+	Json post(const std::string &suffix, const Json &json) {
+		return post(suffix, json.dump());
+	}
 
-    std::string getBaseUrl() const {
-        return base_url_;
-    }
+	void debug() const {
+		std::cout << token_ << '\n';
+	}
+
+	void setBaseUrl(const std::string &url) {
+		base_url_ = url;
+	}
+
+	std::string getBaseUrl() const {
+		return base_url_;
+	}
 
 private:
-    void checkResponse(const Json& json) {
-        if (json.count("error")) {
-            auto reason = json["error"].dump();
-            trigger_error(reason);
+	void checkResponse(const Json &json) const {
+		if (json.count("error")) {
+			const auto reason = json["error"].dump();
+			trigger_error(reason);
 
-            #if OPENAI_VERBOSE_OUTPUT
-                std::cerr << ">> response error :\n" << json.dump(2) << "\n";
-            #endif
-        } 
-    }
+#if OPENAI_VERBOSE_OUTPUT
+			std::cerr << ">> response error :\n" << json.dump(2) << "\n";
+#endif
+		}
+	}
 
-    // as of now the only way
-    bool isJson(const std::string &data){
-        bool rc = true;
-        try {
-            auto json = Json::parse(data); // throws if no json 
-        }
-        catch (std::exception &){
-            rc = false;
-        }
-        return(rc);
-    }
+	// as of now the only way
+	static bool isJson(const std::string &data) {
+		bool rc = true;
+		try {
+			auto json = Json::parse(data); // throws if no json
+		} catch (std::exception &) {
+			rc = false;
+		}
+		return rc;
+	}
 
-    void trigger_error(const std::string& msg) {
-        if (throw_exception_) {
-            throw std::runtime_error(msg);
-        }
-        else {
-            std::cerr << "[OpenAI] error. Reason: " << msg << '\n';
-        }
-    }
+	void trigger_error(const std::string &msg) const {
+		if (throw_exception_) {
+			throw std::runtime_error(msg);
+		}
+		std::cerr << "[OpenAI] error. Reason: " << msg << '\n';
+	}
+
+public:
+	static unique_ptr<OpenAI> createInstance(DatabaseInstance &db, const std::string &api_base_url = "", const std::string &token = "",
+						 const bool throw_exception = true) {
+		auto instance = make_uniq<OpenAI>(db, token, throw_exception, api_base_url);
+		instance->setBaseUrl(api_base_url);
+		instance->setToken(token);
+		return instance;
+	}
 };
-
-inline std::string bool_to_string(const bool b) {
-    std::ostringstream ss;
-    ss << std::boolalpha << b;
-    return ss.str();
-}
-
-inline OpenAI& start(duckdb::DatabaseInstance &db, const std::string& api_base_url = "", const std::string& token = "", const std::string& organization = "", bool throw_exception = true)  {
-    static OpenAI instance{db, token, organization, throw_exception, api_base_url};
-    instance.setBaseUrl(api_base_url);
-    instance.setToken(token);
-    return instance;
-}
-
-} // namespace _detail
-
-// Public interface
-using _detail::OpenAI;
-
-// instance
-using _detail::start;
-
-using _detail::Json;
 
 } // namespace openai
 

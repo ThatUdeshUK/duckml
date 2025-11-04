@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-struct LlmAggBindData : public FunctionData {
+struct LlmAggBindData final : FunctionData {
 	LlmAggBindData(ClientContext &context_p, unique_ptr<BoundPredictInfo> &info) : context(context_p), info(std::move(info)) {
 	}
 

@@ -8,8 +8,8 @@ class HTTPLogger;
 class FileOpener;
 struct FileOpenerInfo;
 
-struct HTTPSParams : public HTTPParams {
-	HTTPSParams(HTTPUtil &http_util) : HTTPParams(http_util) {
+struct HTTPSParams final : HTTPParams {
+	explicit HTTPSParams(HTTPUtil &http_util) : HTTPParams(http_util) {
 	}
 
 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
@@ -18,17 +18,15 @@ struct HTTPSParams : public HTTPParams {
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
 	string ca_cert_file;
 	string bearer_token;
-	// shared_ptr<HTTPState> state;
 };
 
-class HTTPSUtil : public HTTPUtil {
+class HTTPSUtil final : public HTTPUtil {
 public:
 	unique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,
 	                                            optional_ptr<FileOpenerInfo> info) override;
 	unique_ptr<HTTPClient> InitializeClient(HTTPParams &http_params, const string &proto_host_port) override;
 
 	static unordered_map<string, string> ParseGetParameters(const string &text);
-	// static shared_ptr<HTTPUtil> GetHTTPUtil(optional_ptr<FileOpener> opener);
 
 	string GetName() const override;
 };

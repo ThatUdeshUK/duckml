@@ -53,10 +53,10 @@ struct BoundPredictInfo {
 
 class BoundPredictRef : public BoundTableRef {
 public:
-	static constexpr const TableReferenceType TYPE = TableReferenceType::PREDICT;
+	static constexpr auto TYPE = TableReferenceType::PREDICT;
 
 public:
-	explicit BoundPredictRef() : BoundTableRef(TableReferenceType::PREDICT) {
+	explicit BoundPredictRef() : BoundTableRef(TableReferenceType::PREDICT), bind_index(0) {
 	}
 
 	idx_t bind_index;

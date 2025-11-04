@@ -7,6 +7,7 @@ endif()
 
 set(CMAKE_CXX_STANDARD 17)
 
+message(STATUS "Trying to find at: $ENV{LIBLLAMA_INSTALL_PREFIX}/bin")
 find_library(LIBLLAMA_LIB llama HINTS "$ENV{LIBLLAMA_INSTALL_PREFIX}/bin")
 message(STATUS "LLAMA_LIB Libs: ${LIBLLAMA_LIB}")
 

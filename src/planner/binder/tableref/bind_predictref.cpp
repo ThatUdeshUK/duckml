@@ -22,23 +22,21 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	auto result = make_uniq<BoundPredictRef>();
 	auto bound_predict = make_uniq<BoundPredictInfo>();
 	bound_predict->model_name = std::move(ref.model_name);
-	
+
 	bound_predict->prompt = std::move(ref.prompt);
 
 	auto models = make_uniq<BindModelData>();
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::MODEL_ENTRY, [&](CatalogEntry &entry) {
-			auto &item = entry.Cast<ModelCatalogEntry>();
-			if (item.name == bound_predict->model_name) {
+			if (auto &item = entry.Cast<ModelCatalogEntry>(); item.name == bound_predict->model_name) {
 				models->entries.push_back(item);
 			}
 		});
-	};
+	}
 
 	if (models->entries.empty()) {
-		throw InternalException("Catalog Error: Model with name `" + bound_predict->model_name +
-		                        "` does not exist!");
+		throw InternalException("Catalog Error: Model with name `" + bound_predict->model_name + "` does not exist!");
 	}
 
 	auto &stored_model = models->entries[0].get();
@@ -51,14 +49,14 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 		bound_predict->secret = stored_model_data.secret;
 
 		// Infer input output columns from the PROMPT
-		static const std::regex out_re(Prompt::OUT_REGEX, std::regex_constants::icase);
+		const std::regex out_re(Prompt::OUT_REGEX, std::regex_constants::icase);
 		auto words_begin = std::sregex_iterator(bound_predict->prompt.begin(), bound_predict->prompt.end(), out_re);
 		auto words_end = std::sregex_iterator();
 
 		for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
 			std::smatch match = *i;
 			stored_model_data.out_names.push_back(match[1]);
-			
+
 			std::string type = match[2].str();
 			LogicalType out_type = Prompt::type_to_logical_type(type);
 			stored_model_data.out_types.push_back(out_type);
@@ -78,7 +76,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 			}
 			// std::smatch match = *i;
 			// std::string match_str = match.str();
-			// auto attr = match_str.substr(2, match_str.size() - 4);			
+			// auto attr = match_str.substr(2, match_str.size() - 4);
 		}
 	}
 
@@ -88,7 +86,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	vector<LogicalType> input_types;
 	vector<LogicalType> types;
 	if (ref.source) {
-		result->child_binder = Binder::CreateBinder(context, this);
+		result->child_binder = CreateBinder(context, this);
 		result->children.push_back(result->child_binder->Bind(*ref.source));
 
 		result->child_binder->bind_context.GetTypesAndNames(names, input_types);
@@ -134,7 +132,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 		if (bound_predict->model_type == ModelType::GNN) {
 			vector<string> opt_names;
 			vector<LogicalType> opt_types;
-			result->opt_binder = Binder::CreateBinder(context, this);
+			result->opt_binder = CreateBinder(context, this);
 			result->children.push_back(result->opt_binder->Bind(*ref.opt_source));
 
 			result->opt_binder->bind_context.GetTypesAndNames(opt_names, opt_types);
@@ -198,28 +196,28 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	result->bound_predict = std::move(bound_predict);
 	auto subquery_alias = ref.alias.empty() ? "__unnamed_predict" : ref.alias;
 	bind_context.AddGenericBinding(result->bind_index, subquery_alias, names, types);
-	
+
 	if (ref.source) {
 		MoveCorrelatedExpressions(*result->child_binder);
 	}
 	return std::move(result);
 }
 
-unique_ptr<BoundTableRef> Binder::Bind(TablePredictRef &ref) {
-	if (ref.source) {
+unique_ptr<BoundTableRef> Binder::Bind(TablePredictRef &expr) {
+	if (expr.source) {
 		// Wrap the source in a projection
 		auto subquery = make_uniq<SelectNode>();
 		subquery->select_list.push_back(make_uniq<StarExpression>());
-		subquery->from_table = std::move(ref.source);
+		subquery->from_table = std::move(expr.source);
 
 		auto subquery_select = make_uniq<SelectStatement>();
 		subquery_select->node = std::move(subquery);
 		auto subquery_ref = make_uniq<SubqueryRef>(std::move(subquery_select));
 
-		ref.source = std::move(subquery_ref);
+		expr.source = std::move(subquery_ref);
 	}
 
-	return BindBoundPredict(ref);
+	return BindBoundPredict(expr);
 }
 
 } // namespace duckdb

@@ -3,7 +3,6 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 
 #include <iostream>
-#include <map>
 
 #if defined(ENABLE_PREDICT) && PREDICTOR_IMPL == 3
 #include "duckdb_llama_cpp.hpp"
@@ -17,9 +16,9 @@
 // #define VEC_PRED 0
 
 namespace duckdb {
-class PredictScanGlobalState : public GlobalSourceState {
+class PredictScanGlobalState final : public GlobalSourceState {
 public:
-	explicit PredictScanGlobalState(ClientContext &context, unique_ptr<Predictor> p, unique_ptr<PredictStats> s)
+	explicit PredictScanGlobalState(ClientContext & /*context*/, unique_ptr<Predictor> p, unique_ptr<PredictStats> s)
 	    : predictor(std::move(p)), stats(std::move(s)) {
 	}
 
@@ -27,13 +26,14 @@ public:
 	unique_ptr<PredictStats> stats;
 };
 
-class PredictScanLocalState : public LocalSourceState {
+class PredictScanLocalState final : public LocalSourceState {
 public:
-	PredictScanLocalState(ExecutionContext &context) {}
+	explicit PredictScanLocalState(ExecutionContext & /*context*/) {
+	}
 };
 
-PhysicalPredictScan::PhysicalPredictScan(vector<LogicalType> types_p, unique_ptr<BoundPredictInfo> bound_predict_p)
-    : PhysicalOperator(PhysicalOperatorType::PREDICT, std::move(types_p), 0) {
+PhysicalPredictScan::PhysicalPredictScan(vector<LogicalType> types, unique_ptr<BoundPredictInfo> bound_predict_p)
+    : PhysicalOperator(PhysicalOperatorType::PREDICT, std::move(types), 0) {
 	predict_info.model_type = bound_predict_p->model_type;
 	predict_info.model_path = std::move(bound_predict_p->model_path);
 	predict_info.prompt = std::move(bound_predict_p->prompt);
@@ -48,7 +48,7 @@ PhysicalPredictScan::PhysicalPredictScan(vector<LogicalType> types_p, unique_ptr
 
 unique_ptr<Predictor> PhysicalPredictScan::InitPredictor(const PredictInfo &info, const std::string &api_key) {
 #if defined(ENABLE_PREDICT) && (PREDICTOR_IMPL == 3 || defined(ENABLE_LLM_API))
-	bool is_api = !(info.model_path.find(".gguf") != std::string::npos);
+	const bool is_api = info.model_path.find(".gguf") == std::string::npos;
 	std::cout << "Is API Model: " << is_api << std::endl;
 	if (is_api) {
 #if defined(ENABLE_LLM_API)
@@ -56,36 +56,33 @@ unique_ptr<Predictor> PhysicalPredictScan::InitPredictor(const PredictInfo &info
 #else
 		throw InternalException("Unable to infer LLM API model without `ENABLE_LLM_API` build option.");
 #endif
-	} else {
-#if (PREDICTOR_IMPL == 3)
-		auto pred = make_uniq<LlamaCppPredictor>(info.prompt);
-		pred->is_source = true;
-		return std::move(pred);
-#else
-		throw InternalException("Unable to infer local LLMs without `PREDICTOR_IMPL='llama_cpp'` build option.");
-#endif
 	}
+#if (PREDICTOR_IMPL == 3)
+	auto pred = make_uniq<LlamaCppPredictor>(info.prompt);
+	pred->is_source = true;
+	return std::move(pred);
+#else
+	throw InternalException("Unable to infer local LLMs without `PREDICTOR_IMPL='llama_cpp'` build option.");
+#endif
 #else
 	return nullptr;
 #endif
 }
 
 unique_ptr<LocalSourceState> PhysicalPredictScan::GetLocalSourceState(ExecutionContext &context,
-                                                                    GlobalSourceState &gstate) const {
+                                                                      GlobalSourceState & /*gstate*/) const {
 	return make_uniq<PredictScanLocalState>(context);
 }
 
 unique_ptr<GlobalSourceState> PhysicalPredictScan::GetGlobalSourceState(ClientContext &context) const {
-	auto &client_config = ClientConfig::GetConfig(context);
+	const auto &client_config = ClientConfig::GetConfig(context);
 
 	std::string api_key;
 	if (!predict_info.secret.empty()) {
 		auto &secret_manager = SecretManager::Get(context);
-		auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+		const auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 
-		auto secret_entry = secret_manager.GetSecretByName(transaction, predict_info.secret);
-
-		if (secret_entry) {
+		if (const auto secret_entry = secret_manager.GetSecretByName(transaction, predict_info.secret)) {
 			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
 			api_key = kv_secret.TryGetValue("bearer_token").ToString();
 		} else {
@@ -97,22 +94,18 @@ unique_ptr<GlobalSourceState> PhysicalPredictScan::GetGlobalSourceState(ClientCo
 	auto p = InitPredictor(predict_info, api_key);
 	p->task = static_cast<PredictorTask>(predict_info.model_type);
 	p->Config(client_config, predict_info.options);
-	p->Load(predict_info.model_path, stats);
+	p->Load(context, predict_info.model_path, stats);
 
 	return make_uniq<PredictScanGlobalState>(context, std::move(p), std::move(stats));
 }
 
 SourceResultType PhysicalPredictScan::GetData(ExecutionContext &context, DataChunk &chunk,
-                                          OperatorSourceInput &input) const {
+                                              OperatorSourceInput &input) const {
 	auto &g_state = input.global_state.Cast<PredictScanGlobalState>();
-	auto &l_state = input.local_state.Cast<PredictScanLocalState>();
-
-	// predictions.SetCardinality(input);
 
 	auto &predictor = *g_state.predictor.get();
 	predictor.ScanChunk(context.client, chunk, predict_info, g_state.stats);
-	
-	// return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+
 	return SourceResultType::FINISHED;
 }
 
@@ -122,21 +115,20 @@ string PhysicalPredictScan::GetName() const {
 
 InsertionOrderPreservingMap<string> PhysicalPredictScan::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-	result["Type"] = EnumUtil::ToChars<ModelType>(predict_info.model_type);
+	result["Type"] = EnumUtil::ToString<ModelType>(predict_info.model_type);
 	result["Model Path"] = predict_info.model_path;
 
-	for (const auto &item : predict_info.options) {
+	for (const auto &[key, value] : predict_info.options) {
 		stringstream ss;
-		ss << item.second;
-		result[item.first] = ss.str();
+		ss << value;
+		result[key] = ss.str();
 	}
 
 	SetEstimatedCardinality(result, estimated_cardinality);
-	return std::move(result);
+	return result;
 }
 
-ProgressData PhysicalPredictScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<PredictScanGlobalState>();
+ProgressData PhysicalPredictScan::GetProgress(ClientContext &context, GlobalSourceState & /*gstate*/) const {
 	ProgressData res;
 	res.SetInvalid();
 	return res;
