@@ -1,5 +1,4 @@
 #include "duckdb/parser/tableref/table_predict_ref.hpp"
-#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -7,8 +6,7 @@ namespace duckdb {
 // TablePredictRef
 //===--------------------------------------------------------------------===//
 string TablePredictRef::ToString() const {
-	string result;
-	result = source->ToString();
+	string result = source->ToString();
 	result += " PREDICT USING " + model_name;
 	return result;
 }

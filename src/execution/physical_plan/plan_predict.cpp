@@ -17,7 +17,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPredict &op) {
 	case ModelType::LLM: {
 		if (op.children.size() == 0) {
 			return Make<PhysicalPredictScan>(std::move(op.types), std::move(op.bound_predict));
-		} else if (op.children.size() == 1) {
+		}
+		if (op.children.size() == 1) {
 			auto &plan = CreatePlan(*op.children[0]);
 			return Make<PhysicalPredict>(std::move(op.types), plan, std::move(op.bound_predict));
 		}

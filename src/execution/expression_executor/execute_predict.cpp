@@ -91,11 +91,6 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
 			input.data[i].Reference(arguments.data[i]);
-			// #ifdef DEBUG
-			// 			if (expr.children[i]->return_type.id() == LogicalTypeId::VARCHAR) {
-			// 				arguments.data[i].UTFVerify(count);
-			// 			}
-			// #endif
 		}
 	}
 	arguments.SetCardinality(count);
@@ -103,7 +98,7 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 
 	auto &pstate = state->Cast<ExecutePredictState>();
 	if (!pstate.is_loaded) {
-		auto &client_config = ClientConfig::GetConfig(*context);
+		const auto &client_config = ClientConfig::GetConfig(*context);
 
 		pstate.predictor->Config(client_config, pstate.predict_info.options);
 		pstate.predictor->Load(*context, pstate.predict_info.model_path, pstate.stats);
@@ -117,7 +112,7 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 
 	pstate.predictor->PredictChunk(*context, input, predictions, count, pstate.predict_info, pstate.stats);
 
-	Vector empty(result.GetType());
+	const Vector empty(result.GetType());
 	predictions.data[0].Reference(empty);
 
 	VerifyNullHandling(expr, arguments, result);

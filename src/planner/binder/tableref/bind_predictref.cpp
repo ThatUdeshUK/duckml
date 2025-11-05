@@ -9,7 +9,6 @@
 
 #include <regex>
 #include <iostream>
-#include <cctype>
 #include <algorithm>
 
 namespace duckdb {
@@ -62,10 +61,6 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 			stored_model_data.out_types.push_back(out_type);
 		}
 
-		// static const std::regex in_re(R"(\{\{[A-Za-z_][A-Za-z0-9_]*\}\})");
-		// words_begin = std::sregex_iterator(bound_predict->prompt.begin(), bound_predict->prompt.end(), in_re);
-		// words_end = std::sregex_iterator();
-
 		for (auto &expr : ref.parsed_input_columns) {
 			if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 				auto &child_colref = expr->Cast<ColumnRefExpression>();
@@ -74,9 +69,6 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 				}
 				stored_model_data.input_set_names.push_back(child_colref.GetColumnName());
 			}
-			// std::smatch match = *i;
-			// std::string match_str = match.str();
-			// auto attr = match_str.substr(2, match_str.size() - 4);
 		}
 	}
 

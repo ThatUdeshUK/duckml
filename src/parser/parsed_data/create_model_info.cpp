@@ -1,14 +1,11 @@
 #include "duckdb/parser/parsed_data/create_model_info.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
 CreateModelInfo::CreateModelInfo()
     : CreateInfo(CatalogType::MODEL_ENTRY, INVALID_SCHEMA), name(string()), model_type(ModelType::TABULAR),
-      model_path(string()) {
+      model_path(string()), on_prompt(false) {
 }
 
 unique_ptr<CreateInfo> CreateModelInfo::Copy() const {
@@ -41,7 +38,7 @@ string CreateModelInfo::ToString() const {
 	if (temporary) {
 		ss << "TEMPORARY ";
 	}
-	ss << EnumUtil::ToChars<ModelType>(model_type);
+	ss << EnumUtil::ToString<ModelType>(model_type);
 	ss << " MODEL ";
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		ss << " IF NOT EXISTS ";

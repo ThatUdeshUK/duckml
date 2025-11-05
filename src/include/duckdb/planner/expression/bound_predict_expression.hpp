@@ -14,9 +14,9 @@
 namespace duckdb {
 
 //! Represents a function call that has been bound to a base function
-class BoundPredictExpression : public Expression {
+class BoundPredictExpression final : public Expression {
 public:
-	static constexpr const ExpressionClass TYPE = ExpressionClass::PREDICT;
+	static constexpr auto TYPE = ExpressionClass::PREDICT;
 
 public:
 	BoundPredictExpression(LogicalType return_type, vector<unique_ptr<Expression>> arguments);

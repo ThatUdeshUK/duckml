@@ -1,14 +1,12 @@
 #include "duckdb/planner/expression/bound_predict_expression.hpp"
-#include "duckdb/parser/expression/predict_expression.hpp"
-#include "duckdb/function/function_serialization.hpp"
+
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
-BoundPredictExpression::BoundPredictExpression(LogicalType return_type, vector<unique_ptr<Expression>> children_p)
-    : Expression(ExpressionType::PREDICT, ExpressionClass::PREDICT, std::move(return_type)), children(std::move(children_p)) {
-	// D_ASSERT(!function.name.empty());
+BoundPredictExpression::BoundPredictExpression(LogicalType return_type, vector<unique_ptr<Expression>> arguments)
+    : Expression(ExpressionType::PREDICT, ExpressionClass::PREDICT, std::move(return_type)), children(std::move(arguments)) {
 }
 
 
@@ -33,7 +31,7 @@ string BoundPredictExpression::ToString() const {
 }
 
 hash_t BoundPredictExpression::Hash() const {
-	hash_t result = Expression::Hash();
+	const hash_t result = Expression::Hash();
 	return result;
 }
 
@@ -42,15 +40,12 @@ bool BoundPredictExpression::Equals(const BaseExpression &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<BoundPredictExpression>();
-	// if (other.function != function) {
-	// 	return false;
-	// }
-	if (!Expression::ListEquals(children, other.children)) {
+	if (!ListEquals(children, other.children)) {
 		return false;
 	}
-	// if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
-	// 	return false;
-	// }
+	if (!bound_predict->Equals(*other.bound_predict)) {
+		return false;
+	}
 	return true;
 }
 
