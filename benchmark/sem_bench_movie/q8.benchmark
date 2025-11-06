@@ -1,0 +1,11 @@
+# name: benchmark/sem_bench_movie/multiple_small_files_union_by_name.benchmark
+# description: Calculate the number of positive and negative reviews for movie "taken_3". Return scoreSentiment and count.
+# group: [sem_bench_movie]
+
+name Calculate the number of positive and negative reviews for movie "taken_3". Return scoreSentiment and count.
+group sem_bench_movie
+
+load
+
+run
+SELECT sentiment, count(*) AS scoreSentiment FROM LLM o4mini (PROMPT 'Is the {sentiment VARCHAR} of following movie {{reviewText}} either positive or negative.', Reviews) WHERE id = 'taken_3' GROUP BY sentiment;

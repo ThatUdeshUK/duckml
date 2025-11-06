@@ -1,0 +1,11 @@
+# name: benchmark/sem_bench_movie/16_byte_values.benchmark
+# description: Five positive reviews for movie "taken_3". Return reviewId.
+# group: [sem_bench_movie]
+
+name Five positive reviews for movie "taken_3". Return reviewId.
+group sem_bench_movie
+
+load
+
+run
+SELECT reviewId FROM Reviews WHERE id = 'taken_3' AND LLM o4mini (PROMPT 'The following movie {{reviewText}} is {positive BOOLEAN}.');

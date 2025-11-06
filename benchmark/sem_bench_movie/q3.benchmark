@@ -1,0 +1,11 @@
+# name: benchmark/sem_bench_movie/glob_reorder.benchmark
+# description: Count of positive reviews for movie "taken_3". Return the count as positive_review_cnt.
+# group: [sem_bench_movie]
+
+name Count of positive reviews for movie "taken_3". Return the count as positive_review_cnt.
+group sem_bench_movie
+
+load
+
+run
+SELECT count(*) AS positive_review_cnt FROM Reviews WHERE id = 'taken_3' AND LLM o4mini (PROMPT 'The following movie {{reviewText}} is {positive BOOLEAN}.');

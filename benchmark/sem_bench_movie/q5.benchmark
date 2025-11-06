@@ -1,0 +1,11 @@
+# name: benchmark/sem_bench_movie/ignore_errors.benchmark
+# description: Ten Pairs of reviews that express the *same* sentiment (both are positive or both are negative) for movie with id 'ant_man_and_the_wasp_quantumania'. Return id, reviewId from first review, reviewId from second review.
+# group: [sem_bench_movie]
+
+name Ten Pairs of reviews that express the *same* sentiment (both are positive or both are negative) for movie with id 'ant_man_and_the_wasp_quantumania'. Return id, reviewId from first review, reviewId from second review.
+group sem_bench_movie
+
+load
+
+run
+SELECT R1.id, R1.reviewId AS reviewId1, R2.reviewId AS reviewId2 FROM Reviews AS R1 JOIN Reviews AS R2 ON R1.id = R2.id AND R1.reviewId <> R2.reviewId WHERE R1.id = 'ant_man_and_the_wasp_quantumania' AND LLM o4mini (PROMPT 'These movie {{R1.reviewText}} and movie {{R2.reviewText}} express the same sentiment - either both are positive or both are negative') LIMIT 10;

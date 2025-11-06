@@ -1,0 +1,11 @@
+# name: benchmark/sem_bench_movie/q2.benchmark
+# description: Five clearly positive reviews (any movie). Return reviewId.
+# group: [sem_bench_movie]
+
+name Five clearly positive reviews (any movie). Return reviewId.
+group sem_bench_movie
+
+load
+
+run
+SELECT reviewId FROM Reviews WHERE LLM o4mini (PROMPT 'The following movie {{reviewText}} is clearly {positive BOOLEAN}.') LIMIT 5;

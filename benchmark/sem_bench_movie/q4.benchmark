@@ -1,0 +1,11 @@
+# name: benchmark/sem_bench_movie/glob_reorder_union.benchmark
+# description: Positivity ratio of reviews for movie "taken_3". Return the ratio as positivity_ratio.
+# group: [sem_bench_movie]
+
+name Positivity ratio of reviews for movie "taken_3". Return the ratio as positivity_ratio.
+group sem_bench_movie
+
+load
+
+run
+SELECT CAST(SUM(CASE WHEN LLM o4mini (PROMPT 'The following movie {{reviewText}} is clearly {positive BOOLEAN}.') THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) AS positivity_ratio FROM Reviews WHERE id = 'taken_3';
