@@ -107,16 +107,15 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 
 	DataChunk predictions;
 	predictions.InitializeEmpty({expr.return_type}); // schema
-	predictions.SetCardinality(count);
 	predictions.data[0].Reference(result);
+	predictions.SetCardinality(count);
 
 	pstate.predictor->PredictChunk(*context, input, predictions, count, pstate.predict_info, pstate.stats);
 
-	const Vector empty(result.GetType());
-	predictions.data[0].Reference(empty);
-
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);
+
+	Verify(expr, result, count);
 }
 
 } // namespace duckdb
