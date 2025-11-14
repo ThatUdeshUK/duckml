@@ -59,7 +59,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundPredi
 			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
 			api_key = kv_secret.TryGetValue("bearer_token").ToString();
 		} else {
-			throw CatalogException("Secret for the API is not found in the catalogs!");
+			throw CatalogException("Secret " + result->predict_info.secret + " for the API is not found in the catalogs!");
 		}
 	}
 
@@ -114,6 +114,9 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);
+
+	result.Reference(predictions.data[0]);
+	predictions.data[0].Reference(nullptr);
 
 	Verify(expr, result, count);
 }

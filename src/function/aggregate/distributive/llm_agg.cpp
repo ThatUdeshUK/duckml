@@ -37,7 +37,7 @@ struct LlmAggFunction {
 				const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
 				api_key = kv_secret.TryGetValue("bearer_token").ToString();
 			} else {
-				throw CatalogException("Secret for the API is not found in the catalogs!");
+			throw CatalogException("Secret " + info.secret + " for the API is not found in the catalogs!");
 			}
 		}
 
