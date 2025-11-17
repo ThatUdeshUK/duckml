@@ -34,6 +34,7 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
+#include "duckdb/optimizer/limit_to_predict_filter_propagation.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -241,6 +242,11 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::LIMIT_PUSHDOWN, [&]() {
 		LimitPushdown limit_pushdown;
 		plan = limit_pushdown.Optimize(std::move(plan));
+	});
+
+	RunOptimizer(OptimizerType::LIMIT_TO_PREDICT_FILTER_PROPAGATION, [&]() {
+		LimitToPredictFilterPropagation limit_to_predict_filter_propagation;
+		plan = limit_to_predict_filter_propagation.Optimize(std::move(plan));
 	});
 
 	// perform sampling pushdown

@@ -110,7 +110,7 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 	predictions.data[0].Reference(result);
 	predictions.SetCardinality(count);
 
-	pstate.predictor->PredictChunk(*context, input, predictions, count, pstate.predict_info, pstate.stats);
+	pstate.predictor->PredictChunk(*context, input, predictions, input.size(), pstate.predict_info, pstate.stats);
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);
