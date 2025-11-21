@@ -42,32 +42,33 @@ unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &con
 OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<FilterState>();
-	const idx_t limit = estimated_cardinality;
-	if (limit < input.size()) {
-		const idx_t BATCH_SIZE = limit * 2;
-		SelectionVector batch_sel{STANDARD_VECTOR_SIZE};
-		idx_t offset = 0;
-
-		while (offset < input.size() && chunk.size() < limit) {
-			const idx_t count = MinValue<idx_t>(BATCH_SIZE, input.size() - offset);
-			idx_t this_count = state.executor.SelectExpression(input, state.sel, nullptr, offset + count);
-
-			idx_t batch_sel_count = 0;
-			for (idx_t i = 0; i < this_count; i++) {
-				if (state.sel.get_index(i) >= offset && state.sel.get_index(i) < offset + count) {
-					batch_sel.set_index(batch_sel_count++, state.sel.get_index(i));
-				}
-			}
-
-			if (batch_sel_count > 0) {
-				const idx_t to_append = MinValue<idx_t>(batch_sel_count, STANDARD_VECTOR_SIZE - chunk.size());
-				chunk.Append(input, true, &batch_sel, to_append);
-			}
-
-			offset += count;
-		}
-		return OperatorResultType::NEED_MORE_INPUT;
-	}
+	// const idx_t limit = estimated_cardinality;
+	// if (limit < input.size()) {
+	// 	idx_t BATCH_SIZE = limit * 2;
+	// 	SelectionVector batch_sel{STANDARD_VECTOR_SIZE};
+	// 	idx_t offset = 0;
+	//
+	// 	while (offset < input.size() && chunk.size() < limit) {
+	// 		const idx_t count = MinValue<idx_t>(BATCH_SIZE, input.size() - offset);
+	// 		idx_t this_count = state.executor.SelectExpression(input, state.sel, nullptr, offset + count);
+	//
+	// 		idx_t batch_sel_count = 0;
+	// 		for (idx_t i = 0; i < this_count; i++) {
+	// 			if (state.sel.get_index(i) >= offset && state.sel.get_index(i) < offset + count) {
+	// 				batch_sel.set_index(batch_sel_count++, state.sel.get_index(i));
+	// 			}
+	// 		}
+	//
+	// 		if (batch_sel_count > 0) {
+	// 			const idx_t to_append = MinValue<idx_t>(batch_sel_count, STANDARD_VECTOR_SIZE - chunk.size());
+	// 			chunk.Append(input, true, &batch_sel, to_append);
+	// 		}
+	//
+	// 		offset += count;
+	// 		BATCH_SIZE *= 2;
+	// 	}
+	// 	return OperatorResultType::NEED_MORE_INPUT;
+	// }
 
 	const idx_t result_count = state.executor.SelectExpression(input, state.sel);
 	if (result_count == input.size()) {

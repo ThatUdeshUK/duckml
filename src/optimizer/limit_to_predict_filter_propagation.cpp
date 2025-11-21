@@ -40,10 +40,10 @@ bool LimitToPredictFilterPropagation::CanOptimize(duckdb::LogicalOperator &op) {
 
 unique_ptr<LogicalOperator> LimitToPredictFilterPropagation::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op)) {
-		auto &limit = op->Cast<LogicalLimit>();
-		auto &filter = limit.children[0]->Cast<LogicalFilter>();
-		filter.SetEstimatedCardinality(limit.estimated_cardinality);
-		filter.limit = limit.estimated_cardinality;
+		// auto &limit = op->Cast<LogicalLimit>();
+		// auto &filter = limit.children[0]->Cast<LogicalFilter>();
+		// filter.SetEstimatedCardinality(limit.estimated_cardinality);
+		// filter.limit = limit.estimated_cardinality;
 	}
 	for (auto &child : op->children) {
 		child = Optimize(std::move(child));
