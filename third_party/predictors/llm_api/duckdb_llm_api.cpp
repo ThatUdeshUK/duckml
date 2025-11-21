@@ -13,6 +13,7 @@
 #include <thread>
 
 #define LLM_USE_THREADS 1
+#define IS_SCHEMA 1
 
 namespace duckdb {
 LlmApiPredictor::LlmApiPredictor(std::string prompt, std::string base_api, std::string secret)
@@ -77,6 +78,21 @@ void LlmApiPredictor::Load(ClientContext &client, const std::string &path, uniqu
 #endif
 }
 
+string type_to_string(const LogicalTypeId &type) {
+	switch (type) {
+	case LogicalTypeId::VARCHAR:
+		return "string";
+	case LogicalTypeId::INTEGER:
+		return "integer";
+	case LogicalTypeId::DOUBLE:
+		return "number";
+	case LogicalTypeId::BOOLEAN:
+		return "boolean";
+	default:
+		throw InternalException("Unsupported result type");
+	}
+}
+
 void LlmApiPredictor::GenerateGrammar() {
 	std::vector<std::pair<std::string, LogicalTypeId>> attrs {};
 
@@ -84,6 +100,30 @@ void LlmApiPredictor::GenerateGrammar() {
 
 	std::stringstream ss;
 	ss << "{";
+#if IS_SCHEMA
+	ss << "\"type\": \"object\",\n";
+	ss << "\"properties\": {\n";
+	bool is_first = true;
+	for (const auto &[attribute, type] : attrs) {
+		if (!is_first) {
+			ss << ",\n";
+		}
+		ss << "\"" << attribute << "\": { \"type\": \"" << type_to_string(type) << "\" }";
+		is_first = false;
+	}
+	ss << "\n},\n";
+	ss << "\"required\": [";
+	is_first = true;
+	for (const auto &[attribute, type] : attrs) {
+		if (!is_first) {
+			ss << ", ";
+		}
+		ss << "\"" << attribute << "\"";
+		is_first = false;
+	}
+	ss << "],\n";
+	ss << "\"additionalProperties\": false\n";
+#else
 	bool first = true;
 	for (const auto &[attribute, type] : attrs) {
 		if (!first) {
@@ -91,37 +131,23 @@ void LlmApiPredictor::GenerateGrammar() {
 		} else {
 			first = false;
 		}
-
+		ss << "\"<" << type_to_string(type) << ">\"";
 		ss << R"(")" << attribute << R"(" : )";
-		switch (type) {
-		case LogicalTypeId::VARCHAR:
-			ss << R"("<string>")";
-			break;
-		case LogicalTypeId::INTEGER:
-			ss << R"("<integer>")";
-			break;
-		case LogicalTypeId::DOUBLE:
-			ss << R"("<double>")";
-			break;
-		case LogicalTypeId::BOOLEAN:
-			ss << R"("<boolean>")";
-			break;
-		default:
-			throw InternalException("Unsupported result type");
-		}
+
 	}
+#endif
 	ss << "}";
 	this->grammar = ss.str();
 
 	std::cout << "Prompt: " << this->prompt << "\n";
-	std::cout << "Grammar:" << this->grammar << "\n";
+	std::cout << "Grammar:\n------------------\n" << this->grammar << "\n------------------\n";
 }
 
 std::string LlmApiPredictor::GenerateSystemMessage(const bool is_array) const {
 	const std::string suffix =
 	    R"(. Do not include any extra text, explanations, language specifier, produce {<key>: <single value>} for JSON objects. The JSON must be parsable by a standard parser.)";
 	if (is_array) {
-		return R"(You are a helpful assistant. Always respond **only** with valid JSON array where each object is in format )" +
+		return R"(You are a helpful assistant. Always respond **only** with valid single JSON array where each object is in format )" +
 		       this->grammar + suffix;
 	}
 	return R"(You are a helpful assistant. Always respond **only** with valid JSON object (i.e. not an array) in format )" +
@@ -137,7 +163,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 	idx_t frow = batch * batch_size;                // Offset of first row
 	idx_t lrow = std::min(frow + batch_size, rows); // Offset of last row
 	idx_t num_rows = lrow - frow;                   // Number of rows in the batch
-	std::cout << "Batch size: " << num_rows << "\n";
+	std::cout << "------------------\nBatch size: " << num_rows << "\n";
 
 	result->frow = frow;
 
@@ -162,6 +188,14 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		request["model"] = this->model_path;
 		request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 		                       {{"content", rewritten}, {"role", "user"}}};
+#if IS_SCHEMA
+		std::stringstream sch;
+		sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
+		sch << "\"schema\":{\"type\":\"array\",\"minItems\":" << num_rows << ",\"maxItems\":" << num_rows;
+		sch << ",\"items\":" << this->grammar << "}}}";
+		auto array_schema = PromptUtil::parse_json(sch.str());
+		request["response_format"] = array_schema;
+#endif
 
 		auto req_ts = steady_clock::now();
 		auto completion = api.post("chat/completions", request);
@@ -180,18 +214,20 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 			for (auto &msg : completion["choices"]) {
 				llm_out = msg["message"]["content"].get<std::string>();
 			}
-			std::cout << llm_out << "||" << "\n";
+			std::cout << "Batch No: " << batch << "\n" << llm_out << "||" << "\n";
 
 			result->outputs.push_back(llm_out);
 			result->tokens = tokens;
 			result->predict = req_time;
 			result->is_concat = true;
 			result->n_calls = 1;
+			result->n_rows = num_rows;
 			return std::move(result);
 		}
 	}
 
 	int64_t total_time = 0;
+	idx_t row = 0;
 	for (auto &embedded : input) {
 		std::string llm_out {};
 
@@ -223,13 +259,15 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 			llm_out = msg["message"]["content"].get<std::string>();
 		}
 
-		std::cout << llm_out << "||" << "\n";
+		std::cout << "Batch No: " << batch << ", Row No: " << row << "\n" << llm_out << "||" << "\n";
+		row++;
 		result->outputs.push_back(llm_out);
 	}
 	result->tokens = tokens;
 	result->predict = total_time;
 	result->is_concat = false;
 	result->n_calls = num_rows;
+	result->n_rows = num_rows;
 	return std::move(result);
 }
 
@@ -303,16 +341,16 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		for (auto &f : futures) {
 			const auto result = f.get();
 			const idx_t frow = result->frow;
-			sub_reqs += result->n_calls;
+			sub_reqs += result->n_rows;
 			total_tokens += result->tokens;
 			if (result->is_concat) {
 				if (this->use_cache) {
-					prompt_util.extract_array_data(result->outputs[0], output, tuple_id_map, frow, info,
+					prompt_util.extract_array_data(result->outputs[0], output, tuple_id_map, frow, info, result->n_rows,
 												   [this](const string &embedded, const string &llm_out) {
 													   cache[embedded] = llm_out;
 												   });
 				} else {
-					prompt_util.extract_array_data(result->outputs[0], output, frow, info);
+					prompt_util.extract_array_data(result->outputs[0], output, frow, info, false, result->n_rows);
 				}
 			} else {
 				const auto n_rows = result->outputs.size();
@@ -341,7 +379,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		auto result = PredictBatch(client, api, input, rows, batch, batch_size, info);
 		total_tokens += result->tokens;
 		if (result->is_concat) {
-			prompt_util.extract_array_data(result->outputs[0], output, frow, info);
+			prompt_util.extract_array_data(result->outputs[0], output, frow, info, false, result->n_rows);
 		} else {
 			auto n_rows = result->outputs.size();
 			for (size_t i = 0; i < n_rows; i++) {
@@ -391,7 +429,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 	result->tokens = completion["usage"]["total_tokens"].get<int>();
 	result->predict = req_time;
 	result->is_concat = false;
-	result->n_calls = 1;
+	result->n_rows = 1;
 	return std::move(result);
 }
 
@@ -422,7 +460,7 @@ vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<stri
 	}
 	for (auto &f : futures) {
 		const auto result = f.get();
-		sub_reqs += result->n_calls;
+		sub_reqs += result->n_rows;
 		total_tokens += result->tokens;
 		output.push_back(result->outputs[0]);
 	}

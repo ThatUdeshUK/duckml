@@ -18,8 +18,6 @@ duckdb_libpgquery::PGColumnRef* Transformer::MakePGColumnRef(const std::string &
 		auto table_name = col_name.substr(0, ref);
 		auto column_name = col_name.substr(ref + 1);
 
-		std::cout << table_name << "." << column_name << std::endl;
-
         auto *table = duckdb_libpgquery::makeString(strdup(table_name.c_str()));
         auto *col = duckdb_libpgquery::makeString(strdup(column_name.c_str()));
 

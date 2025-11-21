@@ -92,7 +92,6 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 				name_map[*it] = index;
 			}
 			for (const std::string &input_col : stored_model_data.input_set_names) {
-				std::cout << input_col << std::endl;
 				auto entry = name_map.find(input_col);
 				if (entry == name_map.end()) {
 					throw BinderException("Input table should contain the BY feature columns");

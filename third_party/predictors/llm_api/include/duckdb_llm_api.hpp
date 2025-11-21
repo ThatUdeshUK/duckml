@@ -17,6 +17,7 @@ struct BatchResult {
 	idx_t frow;
 	size_t tokens;
 	idx_t n_calls;
+	idx_t n_rows;
 	int64_t move;
 	int64_t predict;
 	int64_t move_rev;

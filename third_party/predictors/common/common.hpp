@@ -36,6 +36,10 @@ public:
 		throw std::runtime_error("No matching JSON end found");
 	}
 
+	static nlohmann::json parse_json(std::string json_str) {
+		return nlohmann::json::parse(json_str);
+	}
+
 	static Value extract_longest_integer(const std::string &input) {
 		std::regex re("\\d+");
 		std::sregex_iterator it(input.begin(), input.end(), re);
@@ -111,35 +115,76 @@ public:
 	template <typename Func>
 	static void extract_array_data(const std::string &llm_out, DataChunk &output,
 	                               const map<string, vector<idx_t>> &unprocessed, const idx_t i,
-	                               const PredictInfo &info,
-	                               Func cache_update_func) {
-		if (auto out_json = nlohmann::json::parse(extract_json(llm_out)); out_json.is_array()) {
-			int64_t row = static_cast<int64_t>(i);
-			for (auto it = out_json.begin(); it != out_json.end(); ++it) {
-				const auto unprocessed_row = std::next(unprocessed.begin(), row);
-				cache_update_func(unprocessed_row->first, it->dump());
-				for (const auto &tuple_id : unprocessed_row->second) {
-					populate_row_data(*it, tuple_id, output, info);
+	                               const PredictInfo &info, const idx_t n_rows, Func cache_update_func) {
+		bool is_fail = false;
+		idx_t failed_from = i;
+		idx_t failed_to = i + n_rows;
+		try {
+			if (auto out_json = nlohmann::json::parse(extract_json(llm_out)); out_json.is_array()) {
+				int64_t row = static_cast<int64_t>(i);
+				for (auto it = out_json.begin(); it != out_json.end(); ++it) {
+					const auto unprocessed_row = std::next(unprocessed.begin(), row);
+					cache_update_func(unprocessed_row->first, it->dump());
+					for (const auto &tuple_id : unprocessed_row->second) {
+						populate_row_data(*it, tuple_id, output, info);
+					}
+					row++;
 				}
-				row++;
+				if (row < i + n_rows - 1) {
+					is_fail = true;
+					failed_from = row;
+				}
+			} else {
+				std::cout << "JSON parse issue: Array not found" << std::endl;
+				is_fail = true;
 			}
-		} else {
-			std::cout << "JSON parse issue: Array not found" << std::endl;
+		} catch (const std::runtime_error &e) {
+			std::cout << "Runtime error: " << e.what() << std::endl;
+			is_fail = true;
+		} catch (const nlohmann::json::parse_error &e) {
+			std::cout << "JSON parse issue: " << e.what() << std::endl;
+			is_fail = true;
+		}
+		if (is_fail) {
+			for (idx_t row = failed_from; row < failed_to; ++row) {
+				fill_null(row, output, info);
+			}
 		}
 	}
 
 	static void extract_array_data(const std::string &llm_out, DataChunk &output, const idx_t i,
-	                               const PredictInfo &info, const bool resize = false) {
-		if (auto out_json = nlohmann::json::parse(extract_json(llm_out)); out_json.is_array()) {
-			if (resize)
-				output.SetCardinality(out_json.size());
-			idx_t row = i;
-			for (auto it = out_json.begin(); it != out_json.end(); ++it) {
-				populate_row_data(*it, row, output, info);
-				row++;
+	                               const PredictInfo &info, const bool resize = false, const idx_t n_rows = 0) {
+		bool is_fail = false;
+		idx_t failed_from = i;
+		idx_t failed_to = i + n_rows;
+		try {
+			if (auto out_json = nlohmann::json::parse(extract_json(llm_out)); out_json.is_array()) {
+				if (resize)
+					output.SetCardinality(out_json.size());
+				idx_t row = i;
+				for (auto it = out_json.begin(); it != out_json.end(); ++it) {
+					populate_row_data(*it, row, output, info);
+					row++;
+				}
+				if (row < i + n_rows) {
+					is_fail = true;
+					failed_from = row;
+				}
+			} else {
+				std::cout << "JSON parse issue: Array not found" << std::endl;
+				is_fail = true;
 			}
-		} else {
-			std::cout << "JSON parse issue: Array not found" << std::endl;
+		} catch (const std::runtime_error &e) {
+			std::cout << "Runtime error: " << e.what() << std::endl;
+			is_fail = true;
+		} catch (const nlohmann::json::parse_error &e) {
+			std::cout << "JSON parse issue: " << e.what() << std::endl;
+			is_fail = true;
+		}
+		if (is_fail) {
+			for (idx_t row = failed_from; row < failed_to; ++row) {
+				fill_null(row, output, info);
+			}
 		}
 	}
 
@@ -203,7 +248,8 @@ public:
 			const auto output_type = info.result_set_types[j];
 			auto col_name = info.result_set_names[j];
 
-			output.SetValue(j, row, Value(output_type));
+			auto &flat_vector = output.data[j];
+			FlatVector::SetNull(flat_vector, row, true);
 		}
 	}
 };
