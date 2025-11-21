@@ -1,0 +1,14 @@
+# name: benchmark/semantic_benchmark/q6.benchmark
+# description: Generate table listing all maturity ratings the in US. Return maturity_label, description.
+# group: [semantic_benchmark]
+
+name Generate table listing all maturity ratings the in US. Return maturity_label, description.
+group semantic_benchmark
+
+load
+
+run
+DROP TABLE IF EXISTS maturity_ratings;
+CREATE TABLE maturity_ratings
+SELECT maturity_label, description
+FROM LLM o4-mini (PROMPT 'Get all the maturity {label VARCHAR} and {description VARCHAR} in the US');

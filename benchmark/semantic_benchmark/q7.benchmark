@@ -1,0 +1,13 @@
+# name: benchmark/semantic_benchmark/q7.benchmark
+# description: Find maturity rating of movies by scanning the poster. Return title, maturity_label.
+# group: [semantic_benchmark]
+
+name Find maturity rating of movies by scanning the poster. Return title, maturity_label.
+group semantic_benchmark
+
+load
+
+run
+SELECT m.title, mr.maturity_label
+FROM movie AS m JOIN maturity_ratings AS mr
+ON LLM o4-mini (PROMPT 'is maturity rating {{mr.description}} depicted in the {{m.poster}}');

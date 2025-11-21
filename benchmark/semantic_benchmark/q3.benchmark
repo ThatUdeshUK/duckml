@@ -1,0 +1,12 @@
+# name: benchmark/semantic_benchmark/q3.benchmark
+# description: Find the language of each Movie. Return title, language.
+# group: [semantic_benchmark]
+
+name Find the language of each Movie. Return title, language.
+group semantic_benchmark
+
+load
+
+run
+SELECT title, LLM o4-mini (PROMPT 'what is the  {language VARCHAR} of the movie {{title}}')
+FROM movie;

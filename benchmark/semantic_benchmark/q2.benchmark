@@ -1,0 +1,15 @@
+# name: benchmark/semantic_benchmark/q2.benchmark
+# description: Extract the genre of all Movies. Return title, genre.
+# group: [semantic_benchmark]
+
+name Extract the genre of all Movies. Return title, genre.
+group sem_bench_movie
+
+load
+
+run
+SELECT title, LLM llama3 (PROMPT 'extract the {genre VARCHAR} from the {{plot}}')
+FROM movie_sample m
+JOIN movie_info mi ON m.id = mi.movie_id
+JOIN info_type it ON mi.info_type_id = it.id
+WHERE it.info = 'plot';

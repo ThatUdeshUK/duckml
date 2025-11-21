@@ -1,0 +1,13 @@
+# name: benchmark/semantic_benchmark/q4.benchmark
+# description: Find negative reviews about Titanic movie. Return review.
+# group: [semantic_benchmark]
+
+name Find negative reviews about Titanic movie. Return review.
+group semantic_benchmark
+
+load
+
+run
+SELECT r.review
+FROM movie AS m JOIN reviews AS r ON m.id = r.movie_id
+WHERE LLM o4-mini (PROMPT 'is the sentiment of the {{r.review}} {negative BOOL}?') AND m.title = ‘Titanic’;
