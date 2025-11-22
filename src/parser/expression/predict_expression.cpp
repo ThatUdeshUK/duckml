@@ -51,6 +51,9 @@ unique_ptr<ParsedExpression> PredictExpression::Copy() const {
 	}
 	auto copy = make_uniq<PredictExpression>(model_name, prompt, std::move(copy_children));
 	copy->agg = agg;
+	copy->input_col_names = input_col_names;
+	copy->out_col_name = out_col_name;
+	copy->out_col_type = out_col_type;
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
