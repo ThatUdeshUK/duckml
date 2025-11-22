@@ -27,6 +27,8 @@ public:
 	string name_pattern {};
 	BenchmarkMetaType meta = BenchmarkMetaType::NONE;
 	BenchmarkProfileInfo profile_info = BenchmarkProfileInfo::NONE;
+	bool calc_acc = false;
+	bool cold_run = true;
 	optional_idx timeout_duration = optional_idx(DEFAULT_TIMEOUT);
 };
 

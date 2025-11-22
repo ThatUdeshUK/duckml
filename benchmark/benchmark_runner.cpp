@@ -140,8 +140,11 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		return;
 	}
 	auto nruns = benchmark->NRuns();
-	for (size_t i = 0; i < nruns + 1; i++) {
-		bool hotrun = i > 0;
+	if (configuration.cold_run) {
+		nruns++;
+	}
+	for (size_t i = 0; i < nruns; i++) {
+		bool hotrun = i > 0 || !configuration.cold_run;
 		if (hotrun) {
 			Log(StringUtil::Format("%s\t%d\t", benchmark->name, i));
 		}
@@ -177,7 +180,11 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 			} else {
 				// write time
 				auto verify = benchmark->Verify(state.get());
-				if (!verify.empty()) {
+				if (StringUtil::StartsWith(verify, "Accuracy:-")) {
+					LogResult(std::to_string(profiler.Elapsed()));
+					LogLine(verify);
+					LogOutput(verify);
+				} else if (!verify.empty()) {
 					LogResult("INCORRECT");
 					LogLine("INCORRECT RESULT: " + verify);
 					LogOutput("INCORRECT RESULT: " + verify);
@@ -304,6 +311,10 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 			}
 		} else if (arg == "--no-summary") {
 			summarize = false;
+		} else if (arg == "--acc") {
+			instance.configuration.calc_acc = true;
+		} else if (arg == "--no-cold") {
+			instance.configuration.cold_run = false;
 		} else if (StringUtil::StartsWith(arg, "--")) {
 			// custom argument
 			auto arg_name = arg.substr(2);

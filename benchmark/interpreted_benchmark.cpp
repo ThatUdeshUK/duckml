@@ -42,6 +42,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	DuckDB db;
 	Connection con;
 	duckdb::unique_ptr<MaterializedQueryResult> result;
+	bool calc_acc;
 
 	explicit InterpretedBenchmarkState(string path, const string &version)
 	    : benchmark_config(GetBenchmarkConfig(version)),
@@ -510,6 +511,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		DeleteDatabase(full_db_path);
 		state = make_uniq<InterpretedBenchmarkState>(full_db_path, storage_version);
 	}
+	state->calc_acc = config.calc_acc;
 	extensions.insert("core_functions");
 	extensions.insert("parquet");
 
@@ -700,16 +702,21 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const Bench
 		                          (int64_t)result_values.size(), (int64_t)result.RowCount(), result.ToString());
 	}
 	// compare values
+	vector<int> accs(query.column_count);
+
 	for (idx_t r = 0; r < result_values.size(); r++) {
 		for (idx_t c = 0; c < query.column_count; c++) {
 			auto value = result.GetValue(c, r);
 			if (result_values[r][c] == "NULL" && value.IsNull()) {
+				accs[c]++;
 				continue;
 			}
 			if (result_values[r][c] == value.ToString()) {
+				accs[c]++;
 				continue;
 			}
 			if (result_values[r][c] == "(empty)" && (value.ToString() == "" || value.IsNull())) {
+				accs[c]++;
 				continue;
 			}
 
@@ -718,13 +725,26 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const Bench
 				verify_val = verify_val.CastAs(*state.con.context, value.type());
 			} catch (...) {
 			}
-			if (!Value::ValuesAreEqual(*state.con.context, verify_val, value)) {
+
+			bool value_equal = Value::ValuesAreEqual(*state.con.context, verify_val, value);
+			if (!state.calc_acc && !value_equal) {
 				return StringUtil::Format("Error in result on row %lld column %lld: expected value \"%s\" but got "
 				                          "value \"%s\"\nObtained result:\n%s",
 				                          r + 1, c + 1, verify_val.ToString().c_str(), value.ToString().c_str(),
 				                          result.ToString().c_str());
 			}
+
+			if (state.calc_acc && value_equal) {
+				accs[c]++;
+			}
 		}
+	}
+	if (state.calc_acc) {
+		std::stringstream ss;
+		for (idx_t c = 0; c < accs.size(); c++) {
+			ss << "Accuracy:-\nColumn id: " << c << ", Accuracy:" << accs[c] * 1.0 / result_values.size() << "\n";
+		}
+		return ss.str();
 	}
 	return string();
 }
