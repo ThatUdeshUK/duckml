@@ -66,7 +66,9 @@ unique_ptr<Predictor> PhysicalPredict::InitPredictor(const PredictInfo &info, co
 	return make_uniq<ONNXPredictor>();
 #elif defined(ENABLE_PREDICT) && (PREDICTOR_IMPL == 3 || defined(ENABLE_LLM_API))
 	const bool is_api = info.model_path.find(".gguf") == std::string::npos;
+#ifdef DEBUG
 	std::cout << "Is API Model: " << is_api << std::endl;
+#endif
 	if (is_api) {
 #if defined(ENABLE_LLM_API)
 		return make_uniq<LlmApiPredictor>(info.prompt, info.base_api, api_key);

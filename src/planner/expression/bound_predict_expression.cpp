@@ -27,7 +27,7 @@ bool BoundPredictExpression::CanThrow() const {
 }
 
 string BoundPredictExpression::ToString() const {
-	return bound_predict->result_set_names[0];
+	return bound_predict->result_set_names[0] + " (pred.)";
 }
 
 hash_t BoundPredictExpression::Hash() const {
@@ -83,38 +83,13 @@ void BoundPredictExpression::Serialize(Serializer &serializer) const {
 	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
-	// FunctionSerializer::Serialize(serializer, function, bind_info.get());
-	// serializer.WriteProperty(202, "is_operator", is_operator);
 }
 
 unique_ptr<Expression> BoundPredictExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 
-	// auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
-	//     deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
-	// auto function_return_type = entry.first.return_type;
-
-	// auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
-
-	// if (entry.first.bind_expression) {
-	// 	// bind the function expression
-	// 	auto &context = deserializer.Get<ClientContext &>();
-	// 	auto bind_input = FunctionBindExpressionInput(context, entry.second, children);
-	// 	// replace the function expression with the bound expression
-	// 	auto bound_expression = entry.first.bind_expression(bind_input);
-	// 	if (bound_expression) {
-	// 		return bound_expression;
-	// 	}
-	// 	// Otherwise, fall thorugh and continue on normally
-	// }
 	auto result = make_uniq<BoundPredictExpression>(return_type, std::move(children));
-	// result->is_operator = is_operator;
-	// if (result->return_type != return_type) {
-	// 	// return type mismatch - push a cast
-	// 	auto &context = deserializer.Get<ClientContext &>();
-	// 	return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
-	// }
 	return std::move(result);
 }
 

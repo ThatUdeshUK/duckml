@@ -49,7 +49,9 @@ PhysicalPredictScan::PhysicalPredictScan(vector<LogicalType> types, unique_ptr<B
 unique_ptr<Predictor> PhysicalPredictScan::InitPredictor(const PredictInfo &info, const std::string &api_key) {
 #if defined(ENABLE_PREDICT) && (PREDICTOR_IMPL == 3 || defined(ENABLE_LLM_API))
 	const bool is_api = info.model_path.find(".gguf") == std::string::npos;
+#ifdef DEBUG
 	std::cout << "Is API Model: " << is_api << std::endl;
+#endif
 	if (is_api) {
 #if defined(ENABLE_LLM_API)
 		return make_uniq<LlmApiPredictor>(info.prompt, info.base_api, api_key);
