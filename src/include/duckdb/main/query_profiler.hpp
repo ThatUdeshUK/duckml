@@ -21,6 +21,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/execution/operator/projection/physical_predict.hpp"
 #include "duckdb/main/profiling_info.hpp"
 #include "duckdb/main/profiling_node.hpp"
 
@@ -42,6 +43,8 @@ struct OperatorInformation {
 
 	double time = 0;
 	idx_t elements_returned = 0;
+	idx_t tokens_used = 0;
+	idx_t llm_calls = 0;
 	idx_t result_set_size = 0;
 	idx_t system_peak_buffer_manager_memory = 0;
 	idx_t system_peak_temp_directory_size = 0;
@@ -54,6 +57,14 @@ struct OperatorInformation {
 
 	void AddReturnedElements(idx_t n_elements) {
 		elements_returned += n_elements;
+	}
+
+	void AddTokensUsed(idx_t n_tokens) {
+		tokens_used += n_tokens;
+	}
+
+	void AddLlmCalls(idx_t n_llm_calls) {
+		llm_calls += n_llm_calls;
 	}
 
 	void AddResultSetSize(idx_t n_result_set_size) {
@@ -90,7 +101,7 @@ public:
 
 	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
-	DUCKDB_API void Flush(const PhysicalOperator &phys_op, std::map<std::string, long> &stats_map);
+	DUCKDB_API void Flush(const PhysicalOperator &phys_op, PredictStats &stats);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
 	DUCKDB_API void AddExtraInfo(InsertionOrderPreservingMap<string> extra_info);
@@ -106,6 +117,9 @@ private:
 
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler op;
+	//! Counters for number of LLM calls and tokens used
+	idx_t llm_calls = 0;
+	idx_t tokens_used = 0;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
 	//! A mapping of physical operators to profiled operator information.

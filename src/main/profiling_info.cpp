@@ -47,6 +47,8 @@ profiler_settings_t ProfilingInfo::DefaultSettings() {
 	        MetricsType::OPERATOR_NAME,
 	        MetricsType::OPERATOR_TYPE,
 	        MetricsType::OPERATOR_CARDINALITY,
+	        MetricsType::LLM_CALLS,
+	        MetricsType::LLM_TOKENS,
 	        MetricsType::CUMULATIVE_ROWS_SCANNED,
 	        MetricsType::OPERATOR_ROWS_SCANNED,
 	        MetricsType::OPERATOR_TIMING,
@@ -62,7 +64,7 @@ profiler_settings_t ProfilingInfo::DefaultRootSettings() {
 
 profiler_settings_t ProfilingInfo::DefaultOperatorSettings() {
 	return {MetricsType::OPERATOR_CARDINALITY, MetricsType::OPERATOR_ROWS_SCANNED, MetricsType::OPERATOR_TIMING,
-	        MetricsType::OPERATOR_NAME, MetricsType::OPERATOR_TYPE};
+	        MetricsType::OPERATOR_NAME, MetricsType::OPERATOR_TYPE, MetricsType::LLM_CALLS, MetricsType::LLM_TOKENS};
 }
 
 void ProfilingInfo::ResetMetrics() {
@@ -90,6 +92,8 @@ void ProfilingInfo::ResetMetrics() {
 			metrics[metric] = Value::CreateValue<uint8_t>(0);
 			break;
 		case MetricsType::ROWS_RETURNED:
+		case MetricsType::LLM_CALLS:
+		case MetricsType::LLM_TOKENS:
 		case MetricsType::RESULT_SET_SIZE:
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:
@@ -217,6 +221,8 @@ void ProfilingInfo::WriteMetricsToJSON(yyjson_mut_doc *doc, yyjson_mut_val *dest
 			break;
 		}
 		case MetricsType::ROWS_RETURNED:
+		case MetricsType::LLM_CALLS:
+		case MetricsType::LLM_TOKENS:
 		case MetricsType::RESULT_SET_SIZE:
 		case MetricsType::CUMULATIVE_CARDINALITY:
 		case MetricsType::OPERATOR_CARDINALITY:

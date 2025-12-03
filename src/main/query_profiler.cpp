@@ -16,6 +16,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "yyjson.hpp"
+#include "duckdb/execution/operator/projection/physical_predict.hpp"
 
 #include <algorithm>
 #include <utility>
@@ -418,6 +419,9 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		if (ProfilingInfo::Enabled(settings, MetricsType::OPERATOR_CARDINALITY) && chunk) {
 			info.AddReturnedElements(chunk->size());
 		}
+		if (ProfilingInfo::Enabled(settings, MetricsType::LLM_CALLS)) {
+			info.AddLlmCalls(op.Elapsed());
+		}
 		if (ProfilingInfo::Enabled(settings, MetricsType::RESULT_SET_SIZE) && chunk) {
 			auto result_set_size = chunk->GetAllocationSize();
 			info.AddResultSetSize(result_set_size);
@@ -486,17 +490,15 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 	info.name = phys_op.GetName();
 }
 
-void OperatorProfiler::Flush(const PhysicalOperator &phys_op, std::map<std::string, long> &stats_map) {
+void OperatorProfiler::Flush(const PhysicalOperator &phys_op, PredictStats &stats_map) {
 	auto entry = operator_infos.find(phys_op);
 	if (entry == operator_infos.end()) {
 		return;
 	}
-	auto &operator_timing = operator_infos.find(phys_op)->second;
-	operator_timing.append_extra_info = "";
-	for (const auto &x : stats_map) {
-		operator_timing.append_extra_info += "|" + x.first + ":" + std::to_string(x.second);
-	}
-	operator_timing.name = phys_op.GetName();
+	auto &info = operator_infos.find(phys_op)->second;
+	info.name = phys_op.GetName();
+	info.AddLlmCalls(stats_map.llm_calls);
+	info.AddTokensUsed(stats_map.tokens_used);
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
@@ -517,6 +519,12 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::OPERATOR_CARDINALITY)) {
 			info.MetricSum<idx_t>(MetricsType::OPERATOR_CARDINALITY, node.second.elements_returned);
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::LLM_CALLS)) {
+			info.MetricSum<idx_t>(MetricsType::LLM_CALLS, node.second.llm_calls);
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::LLM_TOKENS)) {
+			info.MetricSum<idx_t>(MetricsType::LLM_TOKENS, node.second.tokens_used);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::OPERATOR_ROWS_SCANNED)) {
 			if (op.type == PhysicalOperatorType::TABLE_SCAN) {

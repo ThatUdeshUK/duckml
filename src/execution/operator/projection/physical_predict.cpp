@@ -35,11 +35,11 @@ public:
 		std::cout << "Move Rev @run: " << stats->move_rev << std::endl;
 		std::cout << "Batch Size: " << predictor->batch_size << std::endl;
 #endif
-		std::map<std::string, long> stats_map {{"load", stats->load},       {"move", stats->move},
-		                                       {"predict", stats->predict}, {"move_rev", stats->move_rev},
-		                                       {"correct", stats->correct}, {"total", stats->total}};
+		// std::map<std::string, long> stats_map {{"load", stats->load},       {"move", stats->move},
+		//                                        {"predict", stats->predict}, {"move_rev", stats->move_rev},
+		//                                        {"correct", stats->correct}, {"total", stats->total}};
 
-		context.thread.profiler.Flush(op, stats_map);
+		context.thread.profiler.Flush(op, *stats.get());
 	}
 };
 
