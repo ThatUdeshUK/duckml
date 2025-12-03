@@ -329,7 +329,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	}
 
 	if (use_batch) {
-		LLM_LOG( "Max Batch Size: " + std::to_string(batch_size) + ", Rounds: " + std::to_string(rounds) + "\n");
+		LLM_LOG( "Max Batch Size: " + std::to_string(batch_size) + ", Unprocessed: " + std::to_string(unprocessed_rows) + ", Rounds: " + std::to_string(rounds) + "\n");
 	}
 
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
@@ -402,6 +402,8 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	stats->predict += total_time;
 #endif
 	LLM_LOG("Total time (s): " + std::to_string(total_time * 1.0 / 1000000) + "\n");
+	stats->llm_calls += unprocessed_rows;
+	stats->tokens_used += total_tokens;
 }
 
 std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const string &input) {
@@ -526,7 +528,8 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	stats->predict += total_time;
 	LLM_LOG( "Total time (s): " + std::to_string(total_time * 1.0 / 1000000) + "\n");
 
-	stats->move_rev = 0;
+	stats->llm_calls += 1;
+	stats->tokens_used += tokens;
 #endif
 }
 

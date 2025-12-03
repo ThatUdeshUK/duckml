@@ -19,6 +19,13 @@ namespace duckdb {
 class Allocator;
 class ExecutionContext;
 
+typedef std::function<void(idx_t llm_calls, idx_t llm_tokens)> ExpressionProfilerCallback;
+
+struct ExpressionProfileCounters {
+	idx_t llm_calls = 0;
+	idx_t tokens_used = 0;
+};
+
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
 class ExpressionExecutor {
 	friend class BoundIndex;
@@ -27,7 +34,9 @@ public:
 	DUCKDB_API explicit ExpressionExecutor(ClientContext &context);
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression *expression);
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression &expression);
+	DUCKDB_API ExpressionExecutor(ClientContext &context, const Expression &expressions, ExpressionProfilerCallback profiler_callback);
 	DUCKDB_API ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &expressions);
+	DUCKDB_API ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &expressions, ExpressionProfilerCallback profiler_callback);
 	ExpressionExecutor(ExpressionExecutor &&) = delete;
 
 	//! The expressions of the executor
@@ -35,6 +44,7 @@ public:
 	//! The data chunk of the current physical operator, used to resolve
 	//! column references and determines the output cardinality
 	DataChunk *chunk = nullptr;
+	ExpressionProfilerCallback callback;
 
 public:
 	bool HasContext();

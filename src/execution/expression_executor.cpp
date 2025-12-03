@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/execution/expression_executor.hpp"
 
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -23,12 +25,22 @@ ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression 
 	AddExpression(expression);
 }
 
+ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression &expression, ExpressionProfilerCallback profiler_callback)
+	: ExpressionExecutor(context, expression) {
+	callback = std::move(profiler_callback);
+}
+
 ExpressionExecutor::ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &exprs)
     : ExpressionExecutor(context) {
 	D_ASSERT(exprs.size() > 0);
 	for (auto &expr : exprs) {
 		AddExpression(*expr);
 	}
+}
+
+ExpressionExecutor::ExpressionExecutor(ClientContext &context, const vector<unique_ptr<Expression>> &exprs, ExpressionProfilerCallback profiler_callback)
+	: ExpressionExecutor(context, exprs) {
+	callback = std::move(profiler_callback);
 }
 
 ExpressionExecutor::ExpressionExecutor(const vector<unique_ptr<Expression>> &exprs) : context(nullptr) {

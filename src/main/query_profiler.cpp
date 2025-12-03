@@ -130,6 +130,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::HASH_GROUP_BY:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
+	case PhysicalOperatorType::PREDICT:
 	case PhysicalOperatorType::COPY_TO_FILE:
 	case PhysicalOperatorType::TABLE_SCAN:
 	case PhysicalOperatorType::CHUNK_SCAN:
@@ -419,9 +420,6 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		if (ProfilingInfo::Enabled(settings, MetricsType::OPERATOR_CARDINALITY) && chunk) {
 			info.AddReturnedElements(chunk->size());
 		}
-		if (ProfilingInfo::Enabled(settings, MetricsType::LLM_CALLS)) {
-			info.AddLlmCalls(op.Elapsed());
-		}
 		if (ProfilingInfo::Enabled(settings, MetricsType::RESULT_SET_SIZE) && chunk) {
 			auto result_set_size = chunk->GetAllocationSize();
 			info.AddResultSetSize(result_set_size);
@@ -490,15 +488,15 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 	info.name = phys_op.GetName();
 }
 
-void OperatorProfiler::Flush(const PhysicalOperator &phys_op, PredictStats &stats_map) {
+void OperatorProfiler::Flush(const PhysicalOperator &phys_op, PredictStats &stats) {
 	auto entry = operator_infos.find(phys_op);
 	if (entry == operator_infos.end()) {
 		return;
 	}
 	auto &info = operator_infos.find(phys_op)->second;
 	info.name = phys_op.GetName();
-	info.AddLlmCalls(stats_map.llm_calls);
-	info.AddTokensUsed(stats_map.tokens_used);
+	info.AddLlmCalls(stats.llm_calls);
+	info.AddTokensUsed(stats.tokens_used);
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {

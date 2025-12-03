@@ -243,10 +243,22 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 						render_text = extra_info[x][render_y - 1];
 					}
 				}
-				if (render_y + 1 == extra_height && render_text.empty()) {
+				if (render_y + 3 == extra_height && render_text.empty()) {
 					auto entry = node->extra_text.find(RenderTreeNode::CARDINALITY);
 					if (entry != node->extra_text.end()) {
 						render_text = entry->second + " Rows";
+					}
+				}
+				if (render_y + 2 == extra_height && render_text.empty()) {
+					auto entry = node->extra_text.find(RenderTreeNode::LLM_CALLS);
+					if (entry != node->extra_text.end()) {
+						render_text = entry->second + " Calls";
+					}
+				}
+				if (render_y + 1 == extra_height && render_text.empty()) {
+					auto entry = node->extra_text.find(RenderTreeNode::LLM_TOKENS);
+					if (entry != node->extra_text.end()) {
+						render_text = entry->second + " Tokens";
 					}
 				}
 				if (render_y == extra_height && render_text.empty()) {
@@ -453,6 +465,13 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 			result.emplace_back();
 			if (extra_info.find(RenderTreeNode::TIMING) != extra_info.end()) {
 				result.emplace_back();
+			}
+			if (extra_info.find(RenderTreeNode::LLM_CALLS) != extra_info.end()) {
+				// calls - need to reserve space for calls
+				result.emplace_back();
+				if (extra_info.find(RenderTreeNode::LLM_TOKENS) != extra_info.end()) {
+					result.emplace_back();
+				}
 			}
 			break;
 		}

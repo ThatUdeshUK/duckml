@@ -121,6 +121,14 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 		string timing = StringUtil::Format("%.2f", value);
 		result->extra_text[RenderTreeNode::TIMING] = timing + "s";
 	}
+	if (info.Enabled(info.settings, MetricsType::LLM_CALLS)) {
+		auto llm_calls = info.GetMetricAsString(MetricsType::LLM_CALLS);
+		result->extra_text[RenderTreeNode::LLM_CALLS] = llm_calls;
+	}
+	if (info.Enabled(info.settings, MetricsType::LLM_TOKENS)) {
+		auto llm_calls = info.GetMetricAsString(MetricsType::LLM_TOKENS);
+		result->extra_text[RenderTreeNode::LLM_TOKENS] = llm_calls;
+	}
 	return result;
 }
 

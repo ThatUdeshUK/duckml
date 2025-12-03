@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/projection/physical_predict.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 
 #include <iostream>
@@ -107,6 +107,8 @@ SourceResultType PhysicalPredictScan::GetData(ExecutionContext &context, DataChu
 
 	auto &predictor = *g_state.predictor.get();
 	predictor.ScanChunk(context.client, chunk, predict_info, g_state.stats);
+
+	context.thread.profiler.Flush(*this, *g_state.stats);
 
 	return SourceResultType::FINISHED;
 }

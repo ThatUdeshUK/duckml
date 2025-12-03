@@ -23,7 +23,12 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 class FilterState : public CachingOperatorState {
 public:
 	explicit FilterState(ExecutionContext &context, Expression &expr)
-	    : executor(context.client, expr), sel(STANDARD_VECTOR_SIZE) {
+	    : executor(context.client, expr,
+	               [&](idx_t c, idx_t t) {
+		               this->counters.llm_calls += c;
+		               this->counters.tokens_used += t;
+	               }),
+	      sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	ExpressionExecutor executor;
@@ -31,8 +36,14 @@ public:
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op);
+		PredictStats predict_stats;
+		predict_stats.llm_calls = counters.llm_calls;
+		predict_stats.tokens_used = counters.tokens_used;
+		context.thread.profiler.Flush(op, predict_stats);
 	}
+
+private:
+	ExpressionProfileCounters counters;
 };
 
 unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &context) const {

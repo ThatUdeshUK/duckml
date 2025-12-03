@@ -8,15 +8,25 @@ namespace duckdb {
 class ProjectionState : public OperatorState {
 public:
 	explicit ProjectionState(ExecutionContext &context, const vector<unique_ptr<Expression>> &expressions)
-	    : executor(context.client, expressions) {
+	    : executor(context.client, expressions,
+	               [&](idx_t c, idx_t t) {
+		               this->counters.llm_calls += c;
+		               this->counters.tokens_used += t;
+	               }) {
 	}
 
 	ExpressionExecutor executor;
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op);
+		PredictStats predict_stats;
+		predict_stats.llm_calls = counters.llm_calls;
+		predict_stats.tokens_used = counters.tokens_used;
+		context.thread.profiler.Flush(op, predict_stats);
 	}
+
+private:
+	ExpressionProfileCounters counters;
 };
 
 PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,

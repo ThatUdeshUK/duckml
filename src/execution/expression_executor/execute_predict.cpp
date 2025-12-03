@@ -118,6 +118,11 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 	result.Reference(predictions.data[0]);
 	predictions.data[0].Reference(nullptr);
 
+	if (callback) {
+		callback(pstate.stats->llm_calls, pstate.stats->tokens_used);
+		pstate.stats->llm_calls = 0;
+		pstate.stats->tokens_used = 0;
+	}
 	Verify(expr, result, count);
 }
 

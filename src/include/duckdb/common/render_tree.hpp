@@ -25,6 +25,8 @@ public:
 	static constexpr const char *CARDINALITY = "__cardinality__";
 	static constexpr const char *ESTIMATED_CARDINALITY = "__estimated_cardinality__";
 	static constexpr const char *TIMING = "__timing__";
+	static constexpr const char *LLM_CALLS = "__llm_calls__";
+	static constexpr const char *LLM_TOKENS = "__tokens_used__";
 
 public:
 	struct Coordinate {
