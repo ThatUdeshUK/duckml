@@ -17,5 +17,3 @@ FROM movie m
 JOIN movie_info mi ON m.id = mi.movie_id
 JOIN info_type it ON mi.info_type_id = it.id
 WHERE it.info = 'plot';
-
-result benchmark/semantic_benchmark/answers/q2.csv

@@ -5,10 +5,14 @@
 name Summarize the cinematography style of each director who has directed more than 3 movies. Return director_name, movie_count, style.
 group semantic_benchmark
 
-load
+require httpfs load_only
+
+cache semantic_benchmark.duckdb
+
+load benchmark/semantic_benchmark/init/load.sql
 
 run
-SELECT n.name as director_name, count(*) AS movie_count, LLM AGG o4-mini (PROMPT 'Summarize the cinematography style of these movie plots {{mi.info}}') AS summary
+SELECT n.name as director_name, count(*) AS movie_count, LLM AGG llama3 (PROMPT 'Summarize the cinematography style of these movie plots {{mi.info}}') AS summary
 FROM movie m
 JOIN movie_info mi ON m.id = mi.movie_id
 JOIN info_type it ON mi.info_type_id = it.id

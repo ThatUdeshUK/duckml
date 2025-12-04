@@ -5,9 +5,13 @@
 name Find negative reviews about Titanic movie. Return review.
 group semantic_benchmark
 
-load
+require httpfs load_only
+
+cache semantic_benchmark.duckdb
+
+load benchmark/semantic_benchmark/init/load.sql
 
 run
 SELECT r.review
 FROM movie AS m JOIN reviews AS r ON m.id = r.movie_id
-WHERE LLM o4-mini (PROMPT 'is the sentiment of the {{r.review}} {negative BOOL}?') AND m.title = ‘Titanic’;
+WHERE LLM llama3 (PROMPT 'is the sentiment of the {{r.review}} {negative BOOL}?') AND m.title = ‘Titanic’;

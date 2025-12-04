@@ -5,9 +5,13 @@
 name Find maturity rating of movies by scanning the poster. Return title, maturity_label.
 group semantic_benchmark
 
-load
+require httpfs load_only
+
+cache semantic_benchmark.duckdb
+
+load benchmark/semantic_benchmark/init/load.sql
 
 run
 SELECT m.title, mr.maturity_label
 FROM movie AS m JOIN maturity_ratings AS mr
-ON LLM o4-mini (PROMPT 'is maturity rating {{mr.description}} depicted in the {{m.poster}}');
+ON LLM llama3 (PROMPT 'is maturity rating {{mr.description}} depicted in the {{m.poster}}');

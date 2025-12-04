@@ -12,11 +12,9 @@ cache semantic_benchmark.duckdb
 load benchmark/semantic_benchmark/init/load.sql
 
 run
-SELECT title
+SELECT title, LLM llama3 (PROMPT 'extract the {genre VARCHAR} from the movie plot {{mi.info}}')
 FROM movie m
 JOIN movie_info mi ON m.id = mi.movie_id
 JOIN info_type it ON mi.info_type_id = it.id
 WHERE it.info = 'plot'
 LIMIT 5;
-
-result benchmark/semantic_benchmark/answers/q2_0.csv

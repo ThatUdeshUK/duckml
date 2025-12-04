@@ -1,16 +1,19 @@
 CREATE TABLE cast_info(id BIGINT, person_id BIGINT, movie_id BIGINT, person_role_id BIGINT, note VARCHAR, nr_order BIGINT, role_id BIGINT);
 CREATE TABLE info_type(id BIGINT, info VARCHAR);
-CREATE TABLE movie(id BIGINT, title VARCHAR, production_year BIGINT, kind VARCHAR, runtime_mins DOUBLE, genre VARCHAR, lang VARCHAR, director VARCHAR, writer VARCHAR);
+CREATE TABLE movie(id BIGINT, title VARCHAR, runtime_mins DOUBLE, genre VARCHAR, lang VARCHAR, director VARCHAR, writer VARCHAR);
 CREATE TABLE movie_info(id BIGINT, movie_id BIGINT, info_type_id BIGINT, info VARCHAR, note VARCHAR);
 CREATE TABLE "name"(id BIGINT, "name" VARCHAR, imdb_index VARCHAR, imdb_id BIGINT, gender VARCHAR, name_pcode_cf VARCHAR, name_pcode_nf VARCHAR, surname_pcode VARCHAR, md5sum VARCHAR);
 CREATE TABLE review(id_tomato VARCHAR, review_id BIGINT, created_on VARCHAR, critic_name VARCHAR, is_top_critic BOOLEAN, score VARCHAR, state VARCHAR, "publication" VARCHAR, review VARCHAR, sentiment VARCHAR, url VARCHAR, movie_id BIGINT);
 CREATE TABLE role_type(id BIGINT, "role" VARCHAR);
-COPY cast_info FROM 'benchmark/semantic_benchmark/data/cast_info.csv' (FORMAT 'csv', quote '"', delimiter ',', escape '"', header 1);
-COPY info_type FROM 'benchmark/semantic_benchmark/data/info_type.csv' (FORMAT 'csv', quote '"', delimiter ',', escape '"', header 1);
-COPY movie FROM 'benchmark/semantic_benchmark/data/movie.csv' (FORMAT 'csv', quote '"', delimiter ',', escape '"', header 1);
-COPY movie_info FROM 'benchmark/semantic_benchmark/data/movie_info.csv' (FORMAT 'csv', quote '"', delimiter ',', escape '"', header 1);
-COPY "name" FROM 'benchmark/semantic_benchmark/data/name.csv' (FORMAT 'csv', quote '"', delimiter ',', escape '"', header 1);
-COPY review FROM 'benchmark/semantic_benchmark/data/review.csv' (FORMAT 'csv', quote '"', delimiter ',', escape '"', header 1);
-COPY role_type FROM 'benchmark/semantic_benchmark/data/role_type.csv' (FORMAT 'csv', quote '"', delimiter ',', escape '"', header 1);
+
+COPY cast_info FROM 'benchmark/semantic_benchmark/data/cast_info.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
+COPY info_type FROM 'benchmark/semantic_benchmark/data/info_type.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
+COPY movie FROM 'benchmark/semantic_benchmark/data/movie.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
+COPY movie_info FROM 'benchmark/semantic_benchmark/data/movie_info.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
+COPY "name" FROM 'benchmark/semantic_benchmark/data/name.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
+COPY review FROM 'benchmark/semantic_benchmark/data/review.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
+COPY role_type FROM 'benchmark/semantic_benchmark/data/role_type.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
+
+CREATE LLM MODEL o4mini PATH 'o4-mini' ON PROMPT API 'https://api.openai.com/v1/' SECRET openai OPTIONS {"req_per_min": 500};
 CREATE LLM MODEL gemini PATH 'gemini-2.5-flash' ON PROMPT API 'https://generativelanguage.googleapis.com/v1beta/openai/' SECRET google OPTIONS {"req_per_min": 500};
 CREATE LLM MODEL llama3 PATH 'llama3.1:latest' ON PROMPT API 'https://genai.rcac.purdue.edu/api/' SECRET purdue OPTIONS {"req_per_min": 500};

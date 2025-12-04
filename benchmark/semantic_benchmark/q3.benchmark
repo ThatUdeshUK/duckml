@@ -5,8 +5,12 @@
 name Find the language of each Movie. Return title, language.
 group semantic_benchmark
 
-load
+require httpfs load_only
+
+cache semantic_benchmark.duckdb
+
+load benchmark/semantic_benchmark/init/load.sql
 
 run
-SELECT title, LLM o4-mini (PROMPT 'what is the  {language VARCHAR} of the movie {{title}}')
+SELECT title, LLM llama3 (PROMPT 'what is the  {language VARCHAR} of the movie {{title}}')
 FROM movie;

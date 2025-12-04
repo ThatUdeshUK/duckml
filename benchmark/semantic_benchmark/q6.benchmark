@@ -5,10 +5,14 @@
 name Generate table listing all maturity ratings the in US. Return maturity_label, description.
 group semantic_benchmark
 
-load
+require httpfs load_only
+
+cache semantic_benchmark.duckdb
+
+load benchmark/semantic_benchmark/init/load.sql
 
 run
 DROP TABLE IF EXISTS maturity_ratings;
 CREATE TABLE maturity_ratings
 SELECT maturity_label, description
-FROM LLM o4-mini (PROMPT 'Get all the maturity {label VARCHAR} and {description VARCHAR} in the US');
+FROM LLM llama3 (PROMPT 'Get all the maturity {label VARCHAR} and {description VARCHAR} in the US');
