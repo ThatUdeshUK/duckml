@@ -21,7 +21,6 @@ struct LlmAggBindData final : FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		std::cout << "Coping LlmAggBindData!!!" << std::endl;
 		auto copy_info = make_uniq<BoundPredictInfo>();
 		copy_info->model_type = info->model_type;
 		copy_info->model_name = info->model_name;

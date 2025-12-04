@@ -218,24 +218,35 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		} else {
 			tokens += completion["usage"]["total_tokens"].get<int>();
 
+			bool content_found = false;
 			for (auto &msg : completion["choices"]) {
-				llm_out = msg["message"]["content"].get<std::string>();
+				if (msg["message"]["content"].is_string()) {
+					llm_out = msg["message"]["content"].get<std::string>();
+					content_found = true;
+				}
 			}
-			LLM_LOG( "Batch No: " + std::to_string(batch) + "\n" + llm_out + "||" + "\n");
 
-			result->outputs.push_back(llm_out);
-			result->tokens = tokens;
-			result->predict = req_time;
-			result->is_concat = true;
-			result->n_calls = 1;
-			result->n_rows = num_rows;
-			return std::move(result);
+			if (content_found) {
+				LLM_LOG( "Batch No: " + std::to_string(batch) + "\n" + llm_out + "||" + "\n");
+
+				result->outputs.push_back(llm_out);
+				result->tokens = tokens;
+				result->predict = req_time;
+				result->is_concat = true;
+				result->n_calls = 1;
+				result->n_rows = num_rows;
+				return std::move(result);
+			}
+
+			LLM_LOG("LLM call failed! Error: Empty message content. Falling back to non-batch\n");
+			LLM_LOG(rewritten + "\n");
 		}
 	}
 
 	int64_t total_time = 0;
 	idx_t row = 0;
-	for (auto &embedded : input) {
+	for (idx_t i = frow; i < lrow; i++) {
+		auto &embedded = input[i];
 		std::string llm_out {};
 
 		std::string rewritten = this->prompt + ";\n" + embedded;
@@ -244,6 +255,13 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		request["model"] = this->model_path;
 		request["messages"] = {{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
 		                       {{"content", rewritten}, {"role", "user"}}};
+#if IS_SCHEMA
+		std::stringstream sch;
+		sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
+		sch << "\"schema\":" << this->grammar << "}}";
+		auto array_schema = PromptUtil::parse_json(sch.str());
+		request["response_format"] = array_schema;
+#endif
 
 		auto req_ts = steady_clock::now();
 		auto completion = api.post("chat/completions", request);
@@ -262,10 +280,17 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		total_time += req_time;
 		tokens += completion["usage"]["total_tokens"].get<int>();
 
+		bool content_found = false;
 		for (auto &msg : completion["choices"]) {
-			llm_out = msg["message"]["content"].get<std::string>();
+			if (msg["message"]["content"].is_string()) {
+				llm_out = msg["message"]["content"].get<std::string>();
+				content_found = true;
+			}
 		}
 
+		if (!content_found) {
+			LLM_LOG("Single call failed, row: " << row << ", content:" << embedded << "\n");
+		}
 		LLM_LOG( "Batch No: " + std::to_string(batch) + ", Row No: " + std::to_string(row) + "\n" + llm_out + "||\n");
 		row++;
 		result->outputs.push_back(llm_out);
@@ -303,7 +328,6 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 #endif
 
 #if LLM_USE_THREADS
-
 	map<string, vector<idx_t>> tuple_id_map {};
 	vector<string> unprocessed {};
 	for (idx_t i = 0; i < rows; ++i) {
