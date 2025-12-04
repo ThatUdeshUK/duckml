@@ -1,7 +1,6 @@
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/function/aggregate/llm_agg_helpers.hpp"
 #include "duckdb/execution/operator/projection/physical_predict.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
 
 #include <iostream>
 
@@ -16,31 +15,20 @@ struct LlmAggFunction {
 
 	template <class STATE>
 	static void Initialize(STATE &state) {
-		state.value = "";
+		STATE* state_obj = new (&state) STATE{/*init*/};
+		state_obj->value = "";
+		state_obj->~STATE();
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData & /*aggr_input_data*/) {
-		std::cout << "----------- Combine -----------" << std::endl;
-		std::cout << "target: " << target.value << " \n" << "source: " << source.value << std::endl;
-		std::cout << "-------------------------------" << std::endl;
+		// std::cout << "----------- Combine -----------" << std::endl;
+		// std::cout << "target: " << target.value << " \n" << "source: " << source.value << std::endl;
+		// std::cout << "-------------------------------" << std::endl;
 		target.value += source.value;
 	}
 
-	static unique_ptr<Predictor> InitializePredictor(ClientContext &context, const PredictInfo &info) {
-		std::string api_key;
-		if (!info.secret.empty()) {
-			auto &secret_manager = SecretManager::Get(context);
-			const auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-
-			if (const auto secret_entry = secret_manager.GetSecretByName(transaction, info.secret)) {
-				const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
-				api_key = kv_secret.TryGetValue("bearer_token").ToString();
-			} else {
-			throw CatalogException("Secret " + info.secret + " for the API is not found in the catalogs!");
-			}
-		}
-
+	static unique_ptr<Predictor> InitializePredictor(ClientContext &context, const PredictInfo &info, const string &api_key) {
 		auto predictor = PhysicalPredict::InitPredictor(info, api_key);
 		predictor->task = PREDICT_LLM_TASK;
 		return predictor;
@@ -61,14 +49,14 @@ struct LlmAggFunction {
 		predict_info.result_set_types = llm_bind.info->result_set_types;
 		predict_info.options = llm_bind.info->options;
 
-		const auto predictor = InitializePredictor(llm_bind.context, predict_info);
+		const auto predictor = InitializePredictor(llm_bind.context, predict_info, llm_bind.api_key);
 
 		auto stats = make_uniq<PredictStats>();
 		const auto &client_config = ClientConfig::GetConfig(llm_bind.context);
 		predictor->Config(client_config, predict_info.options);
 		predictor->Load(llm_bind.context, predict_info.model_path, stats);
 
-		std::cout << "----------- Finalize ----------" << std::endl;
+		// std::cout << "----------- Finalize ----------" << std::endl;
 		const auto state_data = FlatVector::GetData<STATE *>(states);
 		const auto results = FlatVector::GetData<string_t>(result);
 		vector<string> input_strs;
@@ -79,9 +67,9 @@ struct LlmAggFunction {
 		auto outputs = predictor->PredictString(llm_bind.context, input_strs, predict_info);
 		for (idx_t i = 0; i < count; i++) {
 			auto out = outputs[i];
-			std::cout << "idx: " << i << " :" << std::endl;
-			std::cout << "output: \n" << out << std::endl;
-			std::cout << "-------------------------------" << std::endl;
+			// std::cout << "idx: " << i << " :" << std::endl;
+			// std::cout << "output: \n" << out << std::endl;
+			// std::cout << "-------------------------------" << std::endl;
 			results[i] = StringVector::AddString(result, out);
 		}
 	}
@@ -112,9 +100,9 @@ struct LlmAggFunction {
 				auto value = UnifiedVectorFormat::GetData<string_t>(val_format)[val_idx];
 				auto &result = *states_data[i];
 
-				std::cout << "----------- Update ------------" << std::endl;
-				std::cout << "value: " << value.GetString() << " \n" << "state: " << result.value << std::endl;
-				std::cout << "-------------------------------" << std::endl;
+				// std::cout << "----------- Update ------------" << std::endl;
+				// std::cout << "value: " << value.GetString() << " \n" << "state: " << result.value << std::endl;
+				// std::cout << "-------------------------------" << std::endl;
 
 				result.value += "\n{" + input_name + "=`" + value.GetString() + "`}";
 			}
@@ -145,9 +133,9 @@ struct LlmAggFunction {
 
 			auto &value = UnifiedVectorFormat::GetData<string_t>(val_format)[val_idx];
 
-			std::cout << "----------- Update ------------" << std::endl;
-			std::cout << "value: " << value.GetString() << " \n" << "state: " << result.value << std::endl;
-			std::cout << "-------------------------------" << std::endl;
+			// std::cout << "----------- Update ------------" << std::endl;
+			// std::cout << "value: " << value.GetString() << " \n" << "state: " << result.value << std::endl;
+			// std::cout << "-------------------------------" << std::endl;
 
 			result.value += "\n{" + input_name + "=`" + value.GetString() + "`}";
 		}

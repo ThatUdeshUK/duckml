@@ -17,7 +17,7 @@
 namespace duckdb {
 
 struct LlmAggBindData final : FunctionData {
-	LlmAggBindData(ClientContext &context_p, unique_ptr<BoundPredictInfo> &info) : context(context_p), info(std::move(info)) {
+	LlmAggBindData(ClientContext &context_p, unique_ptr<BoundPredictInfo> &info, const string &api_key) : context(context_p), info(std::move(info)), api_key(api_key) {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -34,7 +34,7 @@ struct LlmAggBindData final : FunctionData {
 		copy_info->input_set_types = info->input_set_types;
 		copy_info->result_set_types = info->result_set_types;
 
-		auto copy = make_uniq<LlmAggBindData>(context, copy_info);
+		auto copy = make_uniq<LlmAggBindData>(context, copy_info, this->api_key);
 		return std::move(copy);
 	}
 
@@ -45,6 +45,7 @@ struct LlmAggBindData final : FunctionData {
 
 	ClientContext &context;
 	unique_ptr<BoundPredictInfo> info;
+	string api_key;
 };
 
 

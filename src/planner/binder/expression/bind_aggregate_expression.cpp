@@ -22,6 +22,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression/bound_predict_expression.hpp"
 #include "duckdb/catalog/catalog_entry/model_catalog_entry.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 
 namespace duckdb {
 
@@ -380,7 +381,9 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 	bound_predict->secret = stored_model_data.secret;
 
 	QueryErrorContext error_context(predict.GetQueryLocation());
-	EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, "llm_agg", error_context);
+	// EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
+	// auto func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
+	EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, predict.agg_func, error_context);
 	auto cat_entry = binder.GetCatalogEntry("", "", function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!cat_entry) {
 		error.AddQueryLocation(predict);
@@ -407,8 +410,20 @@ BindResult BaseSelectBinder::BindAggregate(PredictExpression &predict, idx_t dep
 		error.AddQueryLocation(predict);
 		error.Throw();
 	}	
-	
-	auto predict_bind = make_uniq<LlmAggBindData>(context, bound_predict);
+
+	std::string api_key;
+	if (!bound_predict->secret.empty()) {
+		auto &secret_manager = SecretManager::Get(context);
+		const auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+
+		if (const auto secret_entry = secret_manager.GetSecretByName(transaction, bound_predict->secret)) {
+			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
+			api_key = kv_secret.TryGetValue("bearer_token").ToString();
+		} else {
+			throw CatalogException("LLM_AGG: Secret " + bound_predict->secret + " for the API is not found in the catalogs!");
+		}
+	}
+	auto predict_bind = make_uniq<LlmAggBindData>(context, bound_predict, api_key);
 	aggregate->bind_info = std::move(predict_bind);
 
 	// check for all the aggregates if this aggregate already exists

@@ -36,6 +36,8 @@ public:
 	string out_col_name;
 	//! output column types
 	LogicalType out_col_type;
+	//! Function name for aggregate LLM
+	string agg_func = "llm_agg";
 
 public:
 	string ToString() const override;

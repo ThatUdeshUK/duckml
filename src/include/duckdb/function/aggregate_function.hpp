@@ -264,7 +264,8 @@ public:
 // 		                  destructor_type == AggregateDestructorType::LEGACY,
 // 		              "Aggregate state must be trivially move constructible");
 // #endifS
-		OP::Initialize(*reinterpret_cast<STATE *>(state));
+		auto cast_state = reinterpret_cast<STATE *>(state);
+		OP::Initialize(*cast_state);
 	}
 
 	template <class STATE, class OP>
