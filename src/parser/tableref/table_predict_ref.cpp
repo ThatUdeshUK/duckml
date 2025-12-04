@@ -16,7 +16,7 @@ bool TablePredictRef::Equals(const TableRef &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<TablePredictRef>();
-	if (!source->Equals(*other.source)) {
+	if (source && !source->Equals(*other.source)) {
 		return false;
 	}
 	if (model_name != other.model_name) {
@@ -30,7 +30,9 @@ bool TablePredictRef::Equals(const TableRef &other_p) const {
 
 unique_ptr<TableRef> TablePredictRef::Copy() {
 	auto copy = make_uniq<TablePredictRef>();
-	copy->source = source->Copy();
+	if (source) {
+		copy->source = source->Copy();
+	}
 	if (opt_source) {
 		copy->opt_source = opt_source->Copy();
 	}

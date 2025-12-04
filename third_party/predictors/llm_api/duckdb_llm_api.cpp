@@ -15,10 +15,11 @@
 #define IS_SCHEMA 1
 
 #ifdef NDEBUG
-	#define LLM_LOG(x) do {} while(0)
+#define LLM_LOG(x) do {} while(0)
 #else
-	#include <iostream>
-	#define LLM_LOG(x) do { std::cout << x; } while(0)
+#include <iostream>
+// #define LLM_LOG(x) do {} while(0)
+#define LLM_LOG(x) do { std::cout << x; } while(0)
 #endif
 
 namespace duckdb {
@@ -359,7 +360,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 					prompt_util.extract_array_data(result->outputs[0], output, frow, info, false, result->n_rows);
 				}
 			} else {
-				const auto n_rows = result->outputs.size();
+				const auto n_rows = result->n_rows;
 				for (size_t i = 0; i < n_rows; i++) {
 					const auto unprocessed_idx = frow + i;
 					if (this->use_cache) {
@@ -509,7 +510,14 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	request["model"] = this->model_path;
 	request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 	                       {{"content", rewritten}, {"role", "user"}}};
-
+#if IS_SCHEMA
+	std::stringstream sch;
+	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
+	sch << "\"schema\":{\"type\":\"array\"";
+	sch << ",\"items\":" << this->grammar << "}}}";
+	auto array_schema = PromptUtil::parse_json(sch.str());
+	request["response_format"] = array_schema;
+#endif
 	auto completion = api->post("chat/completions", request);
 	for (auto &msg : completion["choices"]) {
 		llm_out = msg["message"]["content"].get<std::string>();
