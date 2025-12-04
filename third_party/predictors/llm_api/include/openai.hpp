@@ -36,7 +36,7 @@
 #include <string>
 #include <sstream>
 
-#include "../../common/nlohmann/json.hpp" // nlohmann/json
+#include "../../common/common.hpp" // nlohmann/json
 
 namespace duckdb {
 
@@ -120,13 +120,12 @@ public:
 		}
 
 		Json json {};
-		if (isJson(post_request.buffer_out)) {
-			json = Json::parse(post_request.buffer_out);
+		auto parsable_out = PromptUtil::extract_json(post_request.buffer_out);
+		if (isJson(parsable_out)) {
+			json = Json::parse(parsable_out);
 		} else {
-#if OPENAI_VERBOSE_OUTPUT
-			std::cerr << "Response is not a valid JSON";
-			std::cout << "<< " << response.text << "\n";
-#endif
+			std::cout << "Response is not a valid JSON";
+			std::cout << "<< " << post_request.buffer_out << "\n";
 		}
 
 		return json;
