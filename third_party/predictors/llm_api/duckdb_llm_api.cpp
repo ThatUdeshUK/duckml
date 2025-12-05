@@ -18,8 +18,8 @@
 #define LLM_LOG(x) do {} while(0)
 #else
 #include <iostream>
-// #define LLM_LOG(x) do {} while(0)
-#define LLM_LOG(x) do { std::cout << x; } while(0)
+#define LLM_LOG(x) do {} while(0)
+// #define LLM_LOG(x) do { std::cout << x; } while(0)
 #endif
 
 namespace duckdb {
@@ -172,6 +172,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 	idx_t num_rows = lrow - frow;                   // Number of rows in the batch
 	LLM_LOG( "------------------\nBatch size: " + std::to_string(num_rows) + "\n");
 
+	result->n_rows = num_rows;
 	result->frow = frow;
 
 	if (use_batch) {
@@ -194,7 +195,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 
 		request["model"] = this->model_path;
 		request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
-		                       {{"content", rewritten}, {"role", "user"}}};
+							   {{"content", rewritten}, {"role", "user"}}};
 #if IS_SCHEMA
 		std::stringstream sch;
 		sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
@@ -212,8 +213,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		if (completion.contains("error")) {
 			LLM_LOG( "Batch call failed! Falling back to row wise calls. Error: " + completion["error"].get<string>() + "\n");
 			if (completion["code"] == 429) {
-				LLM_LOG( "Wait because too much requests!\n");
-				std::this_thread::sleep_for(std::chrono::seconds(30));
+				LLM_LOG( "Too much requests!\n");
 			}
 		} else {
 			tokens += completion["usage"]["total_tokens"].get<int>();
@@ -231,75 +231,129 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 
 				result->outputs.push_back(llm_out);
 				result->tokens = tokens;
-				result->predict = req_time;
+				result->time = req_time;
 				result->is_concat = true;
 				result->n_calls = 1;
-				result->n_rows = num_rows;
 				return std::move(result);
 			}
 
 			LLM_LOG("LLM call failed! Error: Empty message content. Falling back to non-batch\n");
 			LLM_LOG(rewritten + "\n");
 		}
+		result->is_concat = true;
+		result->n_calls = 1;
+		return std::move(result);
 	}
 
+	for (int row = frow; row < lrow; ++row) {
+		auto single_result = PredictOne(api, input[row], row);
+		result->time += single_result->time;
+		result->tokens += single_result->tokens;
+		result->n_calls += single_result->n_calls;
+		if (single_result->Success()) {
+			result->outputs.emplace_back(std::move(single_result->outputs[0]));
+		}
+	}
+	result->is_concat = false;
+	return std::move(result);
+}
+
+std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const string &input, idx_t row) {
+	auto result = make_uniq<BatchResult>();
+
+	result->n_rows = 1;
+	result->frow = row;
+
+	idx_t tokens = 0;
 	int64_t total_time = 0;
-	idx_t row = 0;
-	for (idx_t i = frow; i < lrow; i++) {
-		auto &embedded = input[i];
-		std::string llm_out {};
+	std::string llm_out {};
 
-		std::string rewritten = this->prompt + ";\n" + embedded;
+	std::string rewritten = this->prompt + ";\n" + input;
 
-		nlohmann::json request;
-		request["model"] = this->model_path;
-		request["messages"] = {{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
-		                       {{"content", rewritten}, {"role", "user"}}};
+	nlohmann::json request;
+	request["model"] = this->model_path;
+	request["messages"] = {{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
+	                       {{"content", rewritten}, {"role", "user"}}};
 #if IS_SCHEMA
-		std::stringstream sch;
-		sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-		sch << "\"schema\":" << this->grammar << "}}";
-		auto array_schema = PromptUtil::parse_json(sch.str());
-		request["response_format"] = array_schema;
+	std::stringstream sch;
+	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
+	sch << "\"schema\":" << this->grammar << "}}";
+	auto array_schema = PromptUtil::parse_json(sch.str());
+	request["response_format"] = array_schema;
 #endif
 
-		auto req_ts = steady_clock::now();
-		auto completion = api.post("chat/completions", request);
-		auto req_te = steady_clock::now();
-		auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
-		LLM_LOG( "Request time (s):" + std::to_string(req_time) + "\n");
-		if (completion.contains("error")) {
-			LLM_LOG( "LLM call failed! Error: " + completion["error"].get<string>() + "\n");
-			if (completion["code"] == 429) {
-				LLM_LOG( "Wait because too much requests!\n");
-				std::this_thread::sleep_for(std::chrono::seconds(30));
-			}
-			result->outputs.emplace_back("");
-			continue;
+	auto req_ts = steady_clock::now();
+	auto completion = api.post("chat/completions", request);
+	auto req_te = steady_clock::now();
+	auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+	LLM_LOG( "Request time (s):" + std::to_string(req_time) + "\n");
+	if (completion.contains("error")) {
+		LLM_LOG( "LLM call failed! Error: " + completion["error"].get<string>() + "\n");
+		if (completion["code"] == 429) {
+			LLM_LOG( "Too much requests!\n");
 		}
-		total_time += req_time;
-		tokens += completion["usage"]["total_tokens"].get<int>();
-
-		bool content_found = false;
-		for (auto &msg : completion["choices"]) {
-			if (msg["message"]["content"].is_string()) {
-				llm_out = msg["message"]["content"].get<std::string>();
-				content_found = true;
-			}
-		}
-
-		if (!content_found) {
-			LLM_LOG("Single call failed, row: " << row << ", content:" << embedded << "\n");
-		}
-		LLM_LOG( "Batch No: " + std::to_string(batch) + ", Row No: " + std::to_string(row) + "\n" + llm_out + "||\n");
-		row++;
-		result->outputs.push_back(llm_out);
+		result->outputs.emplace_back("");
 	}
-	result->tokens = tokens;
-	result->predict = total_time;
+	total_time += req_time;
+	tokens += completion["usage"]["total_tokens"].get<int>();
+
+	bool content_found = false;
+	for (auto &msg : completion["choices"]) {
+		if (msg["message"]["content"].is_string()) {
+			llm_out = msg["message"]["content"].get<std::string>();
+			content_found = true;
+		}
+	}
+
+	if (content_found) {
+		LLM_LOG("Row No: " + std::to_string(row) + "\n" + llm_out + "||\n");
+		result->outputs.push_back(llm_out);
+		result->tokens = tokens;
+		result->time = total_time;
+		result->is_concat = false;
+		result->n_calls = 1;
+		return std::move(result);
+	}
+
+	LLM_LOG("Single call failed, row: " << row << "\n");
 	result->is_concat = false;
-	result->n_calls = num_rows;
-	result->n_rows = num_rows;
+	result->n_calls = 1;
+	return std::move(result);
+}
+
+std::unique_ptr<BatchResult> LlmApiPredictor::PredictAgg(OpenAI &api, const string &input) {
+	auto result = make_uniq<BatchResult>();
+
+	std::string llm_out {};
+
+	std::string rewritten =
+		this->prompt + "; Consider all of the following inputs and produce a single output: \n" + input;
+	LLM_LOG( "prompt: \n" + rewritten + "\n");
+
+	nlohmann::json request;
+
+	request["model"] = this->model_path;
+	auto sys_msg =
+		R"(You are a helpful assistant. Always respond with a plain text. Do not include any explanations, given inputs or language specifiers.)";
+	request["messages"] = {{{"content", sys_msg}, {"role", "system"}}, {{"content", rewritten}, {"role", "user"}}};
+
+	const auto req_ts = steady_clock::now();
+	auto completion = api.post("chat/completions", request);
+	const auto req_te = steady_clock::now();
+	const auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+
+	for (auto &msg : completion["choices"]) {
+		llm_out = msg["message"]["content"].get<std::string>();
+	}
+
+	LLM_LOG( llm_out + "||\n");
+	result->outputs.push_back(llm_out);
+
+	result->tokens = completion["usage"]["total_tokens"].get<int>();
+	result->time = req_time;
+	result->is_concat = false;
+	result->n_calls = 1;
+	result->n_rows = 1;
 	return std::move(result);
 }
 
@@ -347,7 +401,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		}
 	}
 
-	const idx_t unprocessed_rows = unprocessed.size();
+	idx_t unprocessed_rows = unprocessed.size();
 	idx_t rounds = unprocessed_rows / batch_size;
 	if (unprocessed_rows % batch_size != 0) {
 		rounds++;
@@ -358,6 +412,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	}
 
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
+	std::vector<idx_t> batch_fails;
 	size_t total_tokens = 0;
 	size_t sub_reqs = 0;
 	size_t sub_secs = 0;
@@ -366,7 +421,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		for (size_t run = 0; run < n_threads && (batch + run) * batch_size < unprocessed_rows; run++) {
 			idx_t batch_i = batch + run;
 			futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictBatch, this, std::ref(*api.get()),
-			                             std::ref(unprocessed), unprocessed_rows, batch_i, batch_size));
+										 std::ref(unprocessed), unprocessed_rows, batch_i, batch_size));
 		}
 		size_t run = 0;
 		for (auto &f : futures) {
@@ -375,6 +430,12 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			sub_reqs += result->n_rows;
 			total_tokens += result->tokens;
 			if (result->is_concat) {
+				if (!result->Success()) {
+					for (int i = frow; i < result->n_rows; ++i) {
+						batch_fails.emplace_back(i);
+					}
+					continue;
+				}
 				if (this->use_cache) {
 					prompt_util.extract_array_data(result->outputs[0], output, tuple_id_map, frow, info, result->n_rows,
 												   [this](const string &embedded, const string &llm_out) {
@@ -399,6 +460,38 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 				}/**/
 			}
 			run++;
+		}
+		futures.clear();
+		const steady_clock::time_point b_te = steady_clock::now();
+		sub_secs += duration_cast<std::chrono::seconds>(b_te - b_ts).count();
+	}
+
+	unprocessed_rows = batch_fails.size();
+	for (size_t frow = 0; frow < unprocessed_rows; frow += n_threads) {
+		steady_clock::time_point b_ts = steady_clock::now();
+		for (size_t run = 0; run < n_threads && (frow + run) < unprocessed_rows; run++) {
+			idx_t row = frow + run;
+			idx_t real_row = batch_fails[row];
+			futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictOne, this, std::ref(*api.get()),
+										 std::ref(unprocessed[real_row]), real_row));
+		}
+		for (auto &f : futures) {
+			const auto result = f.get();
+			const idx_t unprocessed_idx = result->frow;
+			sub_reqs += result->n_rows;
+			total_tokens += result->tokens;
+
+			if (result->Success()) {
+				if (this->use_cache) {
+					const auto unprocessed_row = std::next(tuple_id_map.begin(), unprocessed_idx);
+					this->cache[unprocessed_row->first] = result->outputs[0];
+					for (const auto &tuple_id : unprocessed_row->second) {
+						prompt_util.extract_row_data(result->outputs[0], tuple_id, output, info);
+					}
+				} else {
+					prompt_util.extract_row_data(result->outputs[0], unprocessed_idx, output, info);
+				}
+			}/**/
 		}
 		futures.clear();
 		const steady_clock::time_point b_te = steady_clock::now();
@@ -431,41 +524,6 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	stats->tokens_used += total_tokens;
 }
 
-std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const string &input) {
-	auto result = make_uniq<BatchResult>();
-
-	std::string llm_out {};
-
-	std::string rewritten =
-	    this->prompt + "; Consider all of the following inputs and produce a single output: \n" + input;
-	LLM_LOG( "prompt: \n" + rewritten + "\n");
-
-	nlohmann::json request;
-
-	request["model"] = this->model_path;
-	auto sys_msg =
-	    R"(You are a helpful assistant. Always respond with a plain text. Do not include any explanations, given inputs or language specifiers.)";
-	request["messages"] = {{{"content", sys_msg}, {"role", "system"}}, {{"content", rewritten}, {"role", "user"}}};
-
-	const auto req_ts = steady_clock::now();
-	auto completion = api.post("chat/completions", request);
-	const auto req_te = steady_clock::now();
-	const auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
-
-	for (auto &msg : completion["choices"]) {
-		llm_out = msg["message"]["content"].get<std::string>();
-	}
-
-	LLM_LOG( llm_out + "||\n");
-	result->outputs.push_back(llm_out);
-
-	result->tokens = completion["usage"]["total_tokens"].get<int>();
-	result->predict = req_time;
-	result->is_concat = false;
-	result->n_rows = 1;
-	return std::move(result);
-}
-
 vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<string> &input, const PredictInfo &info) {
 	vector<string> output {};
 
@@ -489,7 +547,7 @@ vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<stri
 	futures.reserve(input.size());
 	for (size_t call = 0; call < input.size(); call++) {
 		futures.push_back(
-		    std::async(std::launch::async, &LlmApiPredictor::PredictOne, this, std::ref(*api.get()), input[call]));
+		    std::async(std::launch::async, &LlmApiPredictor::PredictAgg, this, std::ref(*api.get()), input[call]));
 	}
 	for (auto &f : futures) {
 		const auto result = f.get();
