@@ -3,6 +3,7 @@
 #include "duckdb/parser/expression/predict_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_predict_expression.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 
 namespace duckdb {
 
@@ -65,10 +66,22 @@ BindResult ExpressionBinder::BindPredict(PredictExpression &expr, idx_t depth) {
 
 	auto &stored_model = entries[0].get();
 	auto stored_model_data = stored_model.GetData();
+
+	if (!stored_model_data.secret.empty()) {
+		auto &secret_manager = SecretManager::Get(context);
+		const auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
+
+		if (const auto secret_entry = secret_manager.GetSecretByName(transaction, stored_model_data.secret)) {
+			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
+			result->bound_predict->secret = kv_secret.TryGetValue("bearer_token").ToString();
+		} else {
+			throw CatalogException("Secret " + stored_model_data.secret + " for the API is not found in the catalogs!");
+		}
+	}
+
 	result->bound_predict->model_type = stored_model_data.model_type;
 	result->bound_predict->model_path = stored_model_data.model_path;
 	result->bound_predict->base_api = stored_model_data.base_api;
-	result->bound_predict->secret = stored_model_data.secret;
 	result->bound_predict->options = stored_model_data.options;
 	
 	if (!result) {

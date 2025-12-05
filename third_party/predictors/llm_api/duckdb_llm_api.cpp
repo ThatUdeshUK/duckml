@@ -431,7 +431,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			total_tokens += result->tokens;
 			if (result->is_concat) {
 				if (!result->Success()) {
-					for (int i = frow; i < result->n_rows; ++i) {
+					for (idx_t i = frow; i < frow + result->n_rows; ++i) {
 						batch_fails.emplace_back(i);
 					}
 					continue;
@@ -457,7 +457,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 					} else {
 						prompt_util.extract_row_data(result->outputs[i], unprocessed_idx, output, info);
 					}
-				}/**/
+				}
 			}
 			run++;
 		}

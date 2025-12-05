@@ -1,7 +1,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_predict_expression.hpp"
 #include "duckdb/execution/operator/projection/physical_predict.hpp"
-#include "duckdb/main/secret/secret_manager.hpp"
 
 #if defined(ENABLE_PREDICT) && PREDICTOR_IMPL == 3
 #include "duckdb_llama_cpp.hpp"
@@ -48,22 +47,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundPredi
 	result->predict_info.result_set_types = expr.bound_predict->result_set_types;
 	result->predict_info.options = expr.bound_predict->options;
 
-	std::string api_key;
-	if (!result->predict_info.secret.empty()) {
-		auto &context = result->GetContext();
-
-		auto &secret_manager = SecretManager::Get(context);
-		const auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
-
-		if (const auto secret_entry = secret_manager.GetSecretByName(transaction, result->predict_info.secret)) {
-			const auto &kv_secret = dynamic_cast<const KeyValueSecret &>(*secret_entry->secret);
-			api_key = kv_secret.TryGetValue("bearer_token").ToString();
-		} else {
-			throw CatalogException("Secret " + result->predict_info.secret + " for the API is not found in the catalogs!");
-		}
-	}
-
-	auto predictor = PhysicalPredict::InitPredictor(result->predict_info, api_key);
+	auto predictor = PhysicalPredict::InitPredictor(result->predict_info, result->predict_info.secret);
 	predictor->task = PREDICT_LLM_TASK;
 	result->predictor = std::move(predictor);
 
