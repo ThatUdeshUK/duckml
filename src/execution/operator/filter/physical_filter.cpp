@@ -5,8 +5,8 @@
 namespace duckdb {
 
 PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-                               idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality) {
+                               idx_t estimated_cardinality, const int limit)
+    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality), limit(limit) {
 	D_ASSERT(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions
@@ -33,6 +33,7 @@ public:
 
 	ExpressionExecutor executor;
 	SelectionVector sel;
+	idx_t tuples_processed = 0;
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
@@ -53,33 +54,36 @@ unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &con
 OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    GlobalOperatorState &gstate, OperatorState &state_p) const {
 	auto &state = state_p.Cast<FilterState>();
-	// const idx_t limit = estimated_cardinality;
-	// if (limit < input.size()) {
-	// 	idx_t BATCH_SIZE = limit * 2;
-	// 	SelectionVector batch_sel{STANDARD_VECTOR_SIZE};
-	// 	idx_t offset = 0;
-	//
-	// 	while (offset < input.size() && chunk.size() < limit) {
-	// 		const idx_t count = MinValue<idx_t>(BATCH_SIZE, input.size() - offset);
-	// 		idx_t this_count = state.executor.SelectExpression(input, state.sel, nullptr, offset + count);
-	//
-	// 		idx_t batch_sel_count = 0;
-	// 		for (idx_t i = 0; i < this_count; i++) {
-	// 			if (state.sel.get_index(i) >= offset && state.sel.get_index(i) < offset + count) {
-	// 				batch_sel.set_index(batch_sel_count++, state.sel.get_index(i));
-	// 			}
-	// 		}
-	//
-	// 		if (batch_sel_count > 0) {
-	// 			const idx_t to_append = MinValue<idx_t>(batch_sel_count, STANDARD_VECTOR_SIZE - chunk.size());
-	// 			chunk.Append(input, true, &batch_sel, to_append);
-	// 		}
-	//
-	// 		offset += count;
-	// 		BATCH_SIZE *= 2;
-	// 	}
-	// 	return OperatorResultType::NEED_MORE_INPUT;
-	// }
+	if (limit != -1 && static_cast<idx_t>(limit) < input.size()) {
+		const idx_t LIMIT = static_cast<idx_t>(limit);
+		idx_t BATCH_SIZE = LIMIT * 2;
+		SelectionVector batch_sel{STANDARD_VECTOR_SIZE};
+		idx_t offset = 0;
+
+		while (offset < input.size() && chunk.size() < LIMIT && state.tuples_processed < LIMIT) {
+			const idx_t count = MinValue<idx_t>(BATCH_SIZE, input.size() - offset);
+			idx_t this_count = state.executor.SelectExpression(input, state.sel, nullptr, offset + count);
+
+			idx_t batch_sel_count = 0;
+			for (idx_t i = 0; i < this_count; i++) {
+				if (state.sel.get_index(i) >= offset && state.sel.get_index(i) < offset + count) {
+					batch_sel.set_index(batch_sel_count++, state.sel.get_index(i));
+				}
+			}
+
+			if (batch_sel_count > 0) {
+				const idx_t to_append = MinValue<idx_t>(batch_sel_count, STANDARD_VECTOR_SIZE - chunk.size());
+				chunk.Append(input, true, &batch_sel, to_append);
+			}
+
+			offset += count;
+			if (BATCH_SIZE < input.size() - offset) {
+				BATCH_SIZE *= 2;
+			}
+			// state.tuples_processed += chunk.size();
+		}
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
 
 	const idx_t result_count = state.executor.SelectExpression(input, state.sel);
 	if (result_count == input.size()) {

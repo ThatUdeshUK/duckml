@@ -25,6 +25,8 @@ bool LimitToPredictFilterPropagation::CanOptimize(duckdb::LogicalOperator &op) {
 				if (comp.left->type == ExpressionType::PREDICT || comp.right->type == ExpressionType::PREDICT) {
 					hasPredict = true;
 				}
+			} else if (expression->expression_class == ExpressionClass::PREDICT) {
+				hasPredict = true;
 			}
 		}
 
@@ -40,10 +42,11 @@ bool LimitToPredictFilterPropagation::CanOptimize(duckdb::LogicalOperator &op) {
 
 unique_ptr<LogicalOperator> LimitToPredictFilterPropagation::Optimize(unique_ptr<LogicalOperator> op) {
 	if (CanOptimize(*op)) {
-		// auto &limit = op->Cast<LogicalLimit>();
-		// auto &filter = limit.children[0]->Cast<LogicalFilter>();
-		// filter.SetEstimatedCardinality(limit.estimated_cardinality);
-		// filter.limit = limit.estimated_cardinality;
+		auto &limit = op->Cast<LogicalLimit>();
+		auto &filter = limit.children[0]->Cast<LogicalFilter>();
+		auto limit_val = limit.limit_val.GetConstantValue();
+		filter.SetEstimatedCardinality(limit_val);
+		filter.limit = static_cast<int>(limit_val);
 	}
 	for (auto &child : op->children) {
 		child = Optimize(std::move(child));

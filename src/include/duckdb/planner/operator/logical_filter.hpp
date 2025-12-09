@@ -22,6 +22,7 @@ public:
 	LogicalFilter();
 
 	vector<idx_t> projection_map;
+	int limit = -1;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

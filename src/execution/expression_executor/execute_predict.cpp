@@ -100,7 +100,7 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 	D_ASSERT(result.GetType() == expr.return_type);
 
 	result.Reference(predictions.data[0]);
-	predictions.data[0].Reference(nullptr);
+	// predictions.data[0].Reference(nullptr);
 
 	if (callback) {
 		callback(pstate.stats->llm_calls, pstate.stats->tokens_used);

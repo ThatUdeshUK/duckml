@@ -18,8 +18,8 @@
 #define LLM_LOG(x) do {} while(0)
 #else
 #include <iostream>
-#define LLM_LOG(x) do {} while(0)
-// #define LLM_LOG(x) do { std::cout << x; } while(0)
+// #define LLM_LOG(x) do {} while(0)
+#define LLM_LOG(x) do { std::cout << x; } while(0)
 #endif
 
 namespace duckdb {
@@ -371,7 +371,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictAgg(OpenAI &api, const stri
  */
 void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
                                    const PredictInfo &info, unique_ptr<PredictStats> &stats) {
-	LLM_LOG( "No. tuples: " + std::to_string(rows) + "\n");
+	std::cout << ( "No. tuples: " + std::to_string(rows) + "\n");
 #if LLM_USE_THREADS
 	LLM_LOG( "No. of threads: " + std::to_string(this->n_threads) + "\n");
 	LLM_LOG( "Requests per min: " + std::to_string(this->req_per_min) + "\n");
@@ -414,6 +414,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
 	std::vector<idx_t> batch_fails;
 	size_t total_tokens = 0;
+	size_t total_calls = 0;
 	size_t sub_reqs = 0;
 	size_t sub_secs = 0;
 	for (size_t batch = 0; batch < rounds; batch = batch + n_threads) {
@@ -428,6 +429,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			const auto result = f.get();
 			const idx_t frow = result->frow;
 			sub_reqs += result->n_rows;
+			total_calls += result->n_calls;
 			total_tokens += result->tokens;
 			if (result->is_concat) {
 				if (!result->Success()) {
@@ -479,6 +481,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			const auto result = f.get();
 			const idx_t unprocessed_idx = result->frow;
 			sub_reqs += result->n_rows;
+			total_calls += result->n_calls;
 			total_tokens += result->tokens;
 
 			if (result->Success()) {
@@ -501,6 +504,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	for (size_t batch = 0; batch < rounds; batch++) {
 		const int frow = batch * batch_size; // Offset of first row
 		auto result = PredictBatch(client, api, input, rows, batch, batch_size, info);
+		total_calls += result->calls;
 		total_tokens += result->tokens;
 		if (result->is_concat) {
 			prompt_util.extract_array_data(result->outputs[0], output, frow, info, false, result->n_rows);
@@ -512,15 +516,15 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		}
 	}
 #endif
-	LLM_LOG( "Total tokens: " + std::to_string(total_tokens) + "\n");
+	std::cout << ( "Total tokens: " + std::to_string(total_tokens) + "\n");
 
 #if OPT_TIMING
 	const steady_clock::time_point end = steady_clock::now();
 	const int64_t total_time = duration_cast<std::chrono::microseconds>(end - begin).count();
 	stats->predict += total_time;
 #endif
-	LLM_LOG("Total time (s): " + std::to_string(total_time * 1.0 / 1000000) + "\n");
-	stats->llm_calls += unprocessed_rows;
+	std::cout << ("Total time (s): " + std::to_string(total_time * 1.0 / 1000000) + "\n");
+	stats->llm_calls += total_calls;
 	stats->tokens_used += total_tokens;
 }
 

@@ -38,6 +38,11 @@ unique_ptr<TableRef> TablePredictRef::Copy() {
 	}
 	copy->model_name = model_name;
 	copy->prompt = prompt;
+	copy->parsed_input_columns.reserve(parsed_input_columns.size());
+	for (auto &child : parsed_input_columns) {
+		copy->parsed_input_columns.push_back(child->Copy());
+	}
+	copy->column_name_alias = column_name_alias;
 	copy->alias = alias;
 	return std::move(copy);
 }
