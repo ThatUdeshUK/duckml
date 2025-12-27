@@ -166,6 +166,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 	auto result = make_uniq<BatchResult>();
 
 	int tokens = 0;
+	int in_tokens = 0;
+	int out_tokens = 0;
 
 	idx_t frow = batch * batch_size;                // Offset of first row
 	idx_t lrow = std::min(frow + batch_size, rows); // Offset of last row
@@ -217,6 +219,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 			}
 		} else {
 			tokens += completion["usage"]["total_tokens"].get<int>();
+			in_tokens += completion["usage"]["prompt_tokens"].get<int>();
+			out_tokens += completion["usage"]["completion_tokens"].get<int>();
 
 			bool content_found = false;
 			for (auto &msg : completion["choices"]) {
@@ -231,6 +235,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 
 				result->outputs.push_back(llm_out);
 				result->tokens = tokens;
+				result->in_tokens = in_tokens;
+				result->out_tokens = out_tokens;
 				result->time = req_time;
 				result->is_concat = true;
 				result->n_calls = 1;
@@ -249,6 +255,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		auto single_result = PredictOne(api, input[row], row);
 		result->time += single_result->time;
 		result->tokens += single_result->tokens;
+		result->in_tokens += single_result->in_tokens;
+		result->out_tokens += single_result->out_tokens;
 		result->n_calls += single_result->n_calls;
 		if (single_result->Success()) {
 			result->outputs.emplace_back(std::move(single_result->outputs[0]));
@@ -265,6 +273,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 	result->frow = row;
 
 	idx_t tokens = 0;
+	idx_t in_tokens = 0;
+	idx_t out_tokens = 0;
 	int64_t total_time = 0;
 	std::string llm_out {};
 
@@ -296,6 +306,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 	}
 	total_time += req_time;
 	tokens += completion["usage"]["total_tokens"].get<int>();
+	in_tokens += completion["usage"]["prompt_tokens"].get<int>();
+	out_tokens += completion["usage"]["completion_tokens"].get<int>();
 
 	bool content_found = false;
 	for (auto &msg : completion["choices"]) {
@@ -309,6 +321,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 		LLM_LOG("Row No: " + std::to_string(row) + "\n" + llm_out + "||\n");
 		result->outputs.push_back(llm_out);
 		result->tokens = tokens;
+		result->in_tokens = in_tokens;
+		result->out_tokens = out_tokens;
 		result->time = total_time;
 		result->is_concat = false;
 		result->n_calls = 1;
@@ -414,6 +428,8 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
 	std::vector<idx_t> batch_fails;
 	size_t total_tokens = 0;
+	size_t total_in_tokens = 0;
+	size_t total_out_tokens = 0;
 	size_t total_calls = 0;
 	size_t sub_reqs = 0;
 	size_t sub_secs = 0;
@@ -431,6 +447,8 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			sub_reqs += result->n_rows;
 			total_calls += result->n_calls;
 			total_tokens += result->tokens;
+			total_in_tokens += result->in_tokens;
+			total_out_tokens += result->out_tokens;
 			if (result->is_concat) {
 				if (!result->Success()) {
 					for (idx_t i = frow; i < frow + result->n_rows; ++i) {
@@ -483,6 +501,8 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			sub_reqs += result->n_rows;
 			total_calls += result->n_calls;
 			total_tokens += result->tokens;
+			total_in_tokens += result->in_tokens;
+			total_out_tokens += result->out_tokens;
 
 			if (result->Success()) {
 				if (this->use_cache) {
@@ -517,6 +537,8 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	}
 #endif
 	std::cout << ( "Total tokens: " + std::to_string(total_tokens) + "\n");
+	std::cout << ( "Total input tokens: " + std::to_string(total_in_tokens) + "\n");
+	std::cout << ( "Total output tokens: " + std::to_string(total_out_tokens) + "\n");
 
 #if OPT_TIMING
 	const steady_clock::time_point end = steady_clock::now();

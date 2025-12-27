@@ -15,6 +15,8 @@ namespace duckdb {
 
 struct BatchResult {
 	size_t tokens;
+	size_t in_tokens;
+	size_t out_tokens;
 	int64_t time;
 	idx_t frow;
 	idx_t n_rows;

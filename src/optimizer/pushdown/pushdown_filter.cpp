@@ -25,6 +25,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 					continue;
 				}
 			}
+		} else if (expression->GetExpressionClass() == ExpressionClass::PREDICT) {
+			auto &client_config = ClientConfig::GetConfig(GetContext());
+			if (client_config.pull_predict_filter) {
+				predict_expr.push_back(std::move(expression));
+				continue;
+			}
 		}
 		if (AddFilter(std::move(expression)) == FilterResult::UNSATISFIABLE) {
 			// filter statically evaluates to false, strip tree
