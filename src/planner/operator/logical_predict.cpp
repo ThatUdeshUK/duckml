@@ -1,5 +1,7 @@
 #include "duckdb/planner/operator/logical_predict.hpp"
 
+#include "duckdb/main/config.hpp"
+
 namespace duckdb {
 
 LogicalPredict::LogicalPredict() : LogicalOperator(LogicalOperatorType::LOGICAL_PREDICT) {

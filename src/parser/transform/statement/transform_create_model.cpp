@@ -4,6 +4,7 @@
 #include "duckdb/common/enum_class_hash.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
