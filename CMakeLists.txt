@@ -1310,11 +1310,6 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
   include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)
 endif()
 
-# Load client specific config
-if(BUILD_PYTHON)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
-endif()
-
 if (ENABLE_PREDICT)
   add_definitions(-DENABLE_PREDICT)
   # ### DEPRECATED ###

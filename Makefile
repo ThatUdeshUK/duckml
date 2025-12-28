@@ -22,8 +22,6 @@ CONFIGS_DIR = ./test/configs
 MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 PROJ_DIR := $(dir $(MKFILE_PATH))
 
-PYTHON ?= python3
-
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	ifneq ($(DOCKER), 1)
@@ -169,9 +167,6 @@ ifeq (${STATIC_OPENSSL}, 1)
 endif
 ifeq (${BUILD_TPCE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_TPCE=1
-endif
-ifeq (${BUILD_PYTHON}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_PYTHON=1 -DDUCKDB_EXTENSION_CONFIGS="tools/pythonpkg/duckdb_extension_config.cmake"
 endif
 ifeq (${ENABLE_PREDICT}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_PREDICT=1  -DPREDICTOR_IMPL="${PREDICTOR_IMPL}"

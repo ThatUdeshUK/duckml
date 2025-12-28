@@ -38,7 +38,7 @@ BindResult ExpressionBinder::BindPredict(PredictExpression &expr, idx_t depth) {
 		children.push_back(std::move(child));
 	}
 
-	auto bound_predict = std::make_unique<BoundPredictInfo>();
+	auto bound_predict = make_unique<BoundPredictInfo>();
 	bound_predict->model_name = expr.model_name;
 	bound_predict->prompt = expr.prompt;
 	bound_predict->input_set_names = std::move(expr.input_col_names);
@@ -46,7 +46,7 @@ BindResult ExpressionBinder::BindPredict(PredictExpression &expr, idx_t depth) {
 	bound_predict->result_set_names.push_back(expr.out_col_name);
 	bound_predict->result_set_types.push_back(expr.out_col_type);
 											   
-	auto result = std::make_unique<BoundPredictExpression>(expr.out_col_type, std::move(children));
+	auto result = make_unique<BoundPredictExpression>(expr.out_col_type, std::move(children));
 	result->bound_predict = std::move(bound_predict);
 
 	vector<reference<ModelCatalogEntry>> entries;

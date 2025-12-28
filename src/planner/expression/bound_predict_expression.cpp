@@ -59,7 +59,7 @@ unique_ptr<Expression> BoundPredictExpression::Copy() const {
 	for (auto &child : children) {
 		new_children.push_back(child->Copy());
 	}
-	auto copy_info = bound_predict ? std::make_unique<BoundPredictInfo>() : nullptr;
+	auto copy_info = bound_predict ? make_unique<BoundPredictInfo>() : nullptr;
 	if (bound_predict) {
 		copy_info->model_type = bound_predict->model_type;
 		copy_info->model_name = bound_predict->model_name;
