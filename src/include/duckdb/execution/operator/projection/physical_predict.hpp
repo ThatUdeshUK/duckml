@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/main/client_config.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/model_type.hpp"
 #include "duckdb/planner/tableref/bound_predictref.hpp"
@@ -75,8 +74,8 @@ public:
 	std::unordered_map<std::string, std::string> cache;
 
 public:
-	virtual void Config(const ClientConfig &config, const case_insensitive_map_t<Value> &options) {}
-	virtual void Load(ClientContext &context, const std::string &path, unique_ptr<PredictStats> &stats) {}
+	virtual void Config(const ClientContext &client, const case_insensitive_map_t<Value> &options) {}
+	virtual void Load(ClientContext &client, const std::string &path, unique_ptr<PredictStats> &stats) {}
 	virtual void PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
 	                          const PredictInfo &info, unique_ptr<PredictStats> &stats) {}
 	virtual void PredictLMChunk(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
@@ -91,7 +90,7 @@ public:
 //! PhysicalPredict implements the operator physical PREDICT operation
 class PhysicalPredict final : public PhysicalOperator {
 public:
-	PhysicalPredict(vector<LogicalType> types, PhysicalOperator &child, unique_ptr<BoundPredictInfo> bound_predict_p);
+	PhysicalPredict(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &child, unique_ptr<BoundPredictInfo> bound_predict_p);
 
 	PredictInfo predict_info;
 
@@ -115,7 +114,7 @@ public:
 //! PhysicalPredict implements the operator physical PREDICT operation
 class PhysicalPredictScan final : public PhysicalOperator {
 public:
-	PhysicalPredictScan(vector<LogicalType> types, unique_ptr<BoundPredictInfo> bound_predict_p);
+	PhysicalPredictScan(PhysicalPlan &physical_plan, vector<LogicalType> types, unique_ptr<BoundPredictInfo> bound_predict_p);
 
 	PredictInfo predict_info;
 

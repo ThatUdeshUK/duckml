@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_MODEL;
 
 public:
-	explicit PhysicalCreateModel(unique_ptr<CreateModelInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_MODEL, {LogicalType::BIGINT}, estimated_cardinality),
+	explicit PhysicalCreateModel(PhysicalPlan &physical_plan, unique_ptr<CreateModelInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_MODEL, {LogicalType::BIGINT}, estimated_cardinality),
 	      info(std::move(info)) {
 	}
 

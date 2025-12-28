@@ -42,7 +42,7 @@ public:
 	}
 
 public:
-	void Config(const ClientConfig &config, const case_insensitive_map_t<Value> &options) override;
+	void Config(const ClientContext &context, const case_insensitive_map_t<Value> &options) override;
 	void Load(ClientContext &context, const std::string &model_path, unique_ptr<PredictStats> &stats) override;
 	void PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, idx_t rows, const PredictInfo &info,
 	                  unique_ptr<PredictStats> &stats) override;

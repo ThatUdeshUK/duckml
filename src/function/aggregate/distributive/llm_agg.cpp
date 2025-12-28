@@ -52,8 +52,7 @@ struct LlmAggFunction {
 		const auto predictor = InitializePredictor(llm_bind.context, predict_info, llm_bind.api_key);
 
 		auto stats = make_uniq<PredictStats>();
-		const auto &client_config = ClientConfig::GetConfig(llm_bind.context);
-		predictor->Config(client_config, predict_info.options);
+		predictor->Config(llm_bind.context, predict_info.options);
 		predictor->Load(llm_bind.context, predict_info.model_path, stats);
 
 		// std::cout << "----------- Finalize ----------" << std::endl;

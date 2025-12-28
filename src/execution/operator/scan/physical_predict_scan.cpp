@@ -32,8 +32,8 @@ public:
 	}
 };
 
-PhysicalPredictScan::PhysicalPredictScan(vector<LogicalType> types, unique_ptr<BoundPredictInfo> bound_predict_p)
-    : PhysicalOperator(PhysicalOperatorType::PREDICT, std::move(types), 0) {
+PhysicalPredictScan::PhysicalPredictScan(PhysicalPlan &physical_plan, vector<LogicalType> types, unique_ptr<BoundPredictInfo> bound_predict_p)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::PREDICT, std::move(types), 0) {
 	predict_info.model_type = bound_predict_p->model_type;
 	predict_info.model_path = std::move(bound_predict_p->model_path);
 	predict_info.prompt = std::move(bound_predict_p->prompt);
@@ -77,8 +77,6 @@ unique_ptr<LocalSourceState> PhysicalPredictScan::GetLocalSourceState(ExecutionC
 }
 
 unique_ptr<GlobalSourceState> PhysicalPredictScan::GetGlobalSourceState(ClientContext &context) const {
-	const auto &client_config = ClientConfig::GetConfig(context);
-
 	std::string api_key;
 	if (!predict_info.secret.empty()) {
 		auto &secret_manager = SecretManager::Get(context);
@@ -95,7 +93,7 @@ unique_ptr<GlobalSourceState> PhysicalPredictScan::GetGlobalSourceState(ClientCo
 	auto stats = make_uniq<PredictStats>();
 	auto p = InitPredictor(predict_info, api_key);
 	p->task = static_cast<PredictorTask>(predict_info.model_type);
-	p->Config(client_config, predict_info.options);
+	p->Config(context, predict_info.options);
 	p->Load(context, predict_info.model_path, stats);
 
 	return make_uniq<PredictScanGlobalState>(context, std::move(p), std::move(stats));

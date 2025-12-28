@@ -11,28 +11,34 @@ class HTTPSClient final : public HTTPClient {
 public:
 	HTTPSClient(const HTTPSParams &http_params, const string &proto_host_port) {
 		client = make_uniq<duckdb_httplib_openssl::Client>(proto_host_port);
+		
+		auto sec = static_cast<time_t>(http_params.timeout);
+		auto usec = static_cast<time_t>(http_params.timeout_usec);
 		client->set_follow_location(http_params.follow_location);
 		client->set_keep_alive(http_params.keep_alive);
+		client->set_write_timeout(sec, usec);
+		client->set_read_timeout(sec, usec);
+		client->set_connection_timeout(sec, usec);
 		if (!http_params.ca_cert_file.empty()) {
 			client->set_ca_cert_path(http_params.ca_cert_file.c_str());
 		}
 		client->enable_server_certificate_verification(http_params.enable_server_cert_verification);
-		client->set_write_timeout(http_params.timeout, http_params.timeout_usec);
-		client->set_read_timeout(http_params.timeout, http_params.timeout_usec);
-		client->set_connection_timeout(http_params.timeout, http_params.timeout_usec);
 		client->set_decompress(false);
+
 		if (!http_params.bearer_token.empty()) {
 			client->set_bearer_token_auth(http_params.bearer_token.c_str());
 		}
 
 		if (!http_params.http_proxy.empty()) {
-			client->set_proxy(http_params.http_proxy, http_params.http_proxy_port);
+			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));
 
 			if (!http_params.http_proxy_username.empty()) {
 				client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
 			}
 		}
 	}
+
+	void Initialize(HTTPParams &http_params) override {}
 
 	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
 		const auto headers = TransformHeaders(info.headers, info.params);

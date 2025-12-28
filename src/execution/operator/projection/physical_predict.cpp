@@ -43,8 +43,8 @@ public:
 	}
 };
 
-PhysicalPredict::PhysicalPredict(vector<LogicalType> types, PhysicalOperator &child, unique_ptr<BoundPredictInfo> bound_predict_p)
-    : PhysicalOperator(PhysicalOperatorType::PREDICT, std::move(types), child.estimated_cardinality) {
+PhysicalPredict::PhysicalPredict(PhysicalPlan &physical_plan, vector<LogicalType> types, PhysicalOperator &child, unique_ptr<BoundPredictInfo> bound_predict_p)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::PREDICT, std::move(types), child.estimated_cardinality) {
 	children.push_back(child);
 
 	predict_info.model_type = bound_predict_p->model_type;
@@ -87,8 +87,6 @@ unique_ptr<Predictor> PhysicalPredict::InitPredictor(const PredictInfo &info, co
 }
 
 unique_ptr<OperatorState> PhysicalPredict::GetOperatorState(ExecutionContext &context) const {
-	const auto &client_config = ClientConfig::GetConfig(context.client);
-
 	std::string api_key;
 	if (!predict_info.secret.empty()) {
 		auto &secret_manager = SecretManager::Get(context.client);
@@ -105,7 +103,7 @@ unique_ptr<OperatorState> PhysicalPredict::GetOperatorState(ExecutionContext &co
 	auto stats = make_uniq<PredictStats>();
 	auto p = InitPredictor(predict_info, api_key);
 	p->task = static_cast<PredictorTask>(predict_info.model_type);
-	p->Config(client_config, predict_info.options);
+	p->Config(context.client, predict_info.options);
 	p->Load(context.client, predict_info.model_path, stats);
 	return make_uniq<PredictState>(context, std::move(p), std::move(stats));
 }

@@ -28,7 +28,9 @@ LlamaCppPredictor::LlamaCppPredictor(std::string prompt)
  * @param config contains default or manually set configs.
  * @param options map of overrides for the client configs set when model is uploaded.
  */
-void LlamaCppPredictor::Config(const ClientConfig &config, const case_insensitive_map_t<Value> &options) {
+void LlamaCppPredictor::Config(const ClientContext &context, const case_insensitive_map_t<Value> &options) {
+	const auto &config = ClientConfig::GetConfig(context);
+
 	this->batch_size = options.find("batch_size") != options.end() ? IntegerValue::Get(options.at("batch_size"))
 	                                                               : config.ml_batch_size;
 	this->llm_max_tokens = options.find("llm_max_tokens") != options.end()

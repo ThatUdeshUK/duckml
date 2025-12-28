@@ -48,7 +48,7 @@ public:
 	LlmApiPredictor(std::string prompt, std::string base_api, std::string secret);
 
 public:
-	void Config(const ClientConfig &config, const case_insensitive_map_t<Value> &options) override;
+	void Config(const ClientContext &context, const case_insensitive_map_t<Value> &options) override;
 	void Load(ClientContext &client, const std::string &path, unique_ptr<PredictStats> &stats) override;
 	void PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
 	                  const PredictInfo &info, unique_ptr<PredictStats> &stats) override;

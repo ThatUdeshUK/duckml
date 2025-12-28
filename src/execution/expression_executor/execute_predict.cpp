@@ -82,9 +82,7 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 
 	auto &pstate = state->Cast<ExecutePredictState>();
 	if (!pstate.is_loaded) {
-		const auto &client_config = ClientConfig::GetConfig(*context);
-
-		pstate.predictor->Config(client_config, pstate.predict_info.options);
+		pstate.predictor->Config(*context, pstate.predict_info.options);
 		pstate.predictor->Load(*context, pstate.predict_info.model_path, pstate.stats);
 		pstate.is_loaded = true;
 	}
