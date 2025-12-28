@@ -155,6 +155,9 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 	case ExpressionType::FUNCTION: {
 		// Special-handling for lambdas, which are inside function expressions.
 		auto &function = expr->Cast<FunctionExpression>();
+		if (!IsUnnestFunction(function.function_name)) {
+			BindAndQualifyFunction(function, false);
+		}
 		if (function.IsLambdaFunction()) {
 			return QualifyColumnNamesInLambda(function, lambda_params);
 		}
@@ -445,10 +448,9 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnNameWithManyDots(Col
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &col_ref, ErrorData &error) {
-
-	// try binding as a lambda parameter
 	if (!col_ref.IsQualified()) {
-		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetName());
+		// Try binding as a lambda parameter.
+		auto lambda_ref = LambdaRefExpression::FindMatchingBinding(lambda_bindings, col_ref.GetColumnName());
 		if (lambda_ref) {
 			return lambda_ref;
 		}

@@ -74,6 +74,7 @@ ExplainableStmt:
 			| IndexStmt
 			| InsertStmt
 			| LoadStmt
+			| MergeIntoStmt
 			| PragmaStmt
 			| PrepareStmt
 			| RenameStmt

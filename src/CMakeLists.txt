@@ -60,6 +60,12 @@ endfunction()
 if(AMALGAMATION_BUILD)
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
+  if(SET_DUCKDB_LIBRARY_VERSION)
+    set_target_properties(
+      duckdb
+      PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
+                 SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
+  endif()
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb PUBLIC)
   link_extension_libraries(duckdb PRIVATE)
@@ -123,8 +129,13 @@ else()
     set(DUCKDB_LINK_LIBS ${DUCKDB_LINK_LIBS} duckdb_llm_api)
   endif()
 
-  add_library(duckdb SHARED ${ALL_OBJECT_FILES}
-          include/duckdb/execution/operator/projection/physical_predict_gnn.h)
+  add_library(duckdb SHARED ${ALL_OBJECT_FILES})
+  if(SET_DUCKDB_LIBRARY_VERSION)
+    set_target_properties(
+      duckdb
+      PROPERTIES VERSION ${DUCKDB_VERSION_NUMBER}
+                 SOVERSION ${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION})
+  endif()
 
   if(WIN32 AND NOT MINGW)
     ensure_variable_is_number(DUCKDB_MAJOR_VERSION RC_MAJOR_VERSION)

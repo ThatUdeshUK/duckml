@@ -35,6 +35,7 @@ class BoundConstantExpression;
 class BoundDefaultExpression;
 class BoundFunctionExpression;
 class BoundPredictExpression;
+class BoundLambdaRefExpression;
 class BoundOperatorExpression;
 class BoundParameterExpression;
 class BoundReferenceExpression;
@@ -57,5 +58,7 @@ class BoundColumnDataRef;
 class BoundCTERef;
 class BoundPivotRef;
 class BoundPredictRef;
+
+class BoundMergeIntoAction;
 
 } // namespace duckdb

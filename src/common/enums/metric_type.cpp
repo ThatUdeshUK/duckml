@@ -41,7 +41,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_MATERIALIZED_CTE,
         MetricsType::OPTIMIZER_SUM_REWRITER,
         MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
-        MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION,
+        MetricsType::OPTIMIZER_CTE_INLINING,
     };
 }
 
@@ -116,8 +116,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_SUM_REWRITER;
         case OptimizerType::LATE_MATERIALIZATION:
             return MetricsType::OPTIMIZER_LATE_MATERIALIZATION;
-        case OptimizerType::LIMIT_TO_PREDICT_FILTER_PROPAGATION:
-            return MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION;
+        case OptimizerType::CTE_INLINING:
+            return MetricsType::OPTIMIZER_CTE_INLINING;
        default:
             throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
     };
@@ -181,8 +181,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::SUM_REWRITER;
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
             return OptimizerType::LATE_MATERIALIZATION;
-        case MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION:
-            return OptimizerType::LIMIT_TO_PREDICT_FILTER_PROPAGATION;
+        case MetricsType::OPTIMIZER_CTE_INLINING:
+            return OptimizerType::CTE_INLINING;
     default:
             return OptimizerType::INVALID;
     };
@@ -218,7 +218,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
         case MetricsType::OPTIMIZER_SUM_REWRITER:
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
-        case MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION:
+        case MetricsType::OPTIMIZER_CTE_INLINING:
             return true;
         default:
             return false;
