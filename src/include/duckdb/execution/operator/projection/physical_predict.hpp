@@ -19,7 +19,8 @@ typedef enum PredictorTask {
 	PREDICT_TABULAR_TASK = 0,
 	PREDICT_LM_TASK = 1,
 	PREDICT_GNN_TASK = 2,
-	PREDICT_LLM_TASK = 3
+	PREDICT_LLM_TASK = 3,
+	PREDICT_EMBED_TASK = 4
 } PredictorTask;
 
 struct PredictStats {

@@ -1,8 +1,10 @@
 %type <node> llm_model
+%type <node> embed_model
 %type <ival> model_type_value
 %type <list> result_col_list with_result_col_list
 %type <node> model_on
 %type <node> model_on_prompt
+%type <node> model_on_embed
 %type <node> opt_feat_col_list
 %type <node> feat_col_list
 %type <list> opt_option

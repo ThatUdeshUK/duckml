@@ -35,7 +35,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	}
 
 	if (models->entries.empty()) {
-		throw InternalException("Catalog Error: Model with name `" + bound_predict->model_name + "` does not exist!");
+		throw BinderException("Catalog Error: Model with name `" + bound_predict->model_name + "` does not exist!");
 	}
 
 	auto &stored_model = models->entries[0].get();
@@ -66,6 +66,23 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 				auto &child_colref = expr->Cast<ColumnRefExpression>();
 				if (child_colref.IsQualified()) {
 					throw BinderException(*expr, "PREDICT expression cannot contain qualified columns");
+				}
+				stored_model_data.input_set_names.push_back(child_colref.GetColumnName());
+			}
+		}
+	}
+
+	if (ref.is_embedding) {
+		bound_predict->base_api = stored_model_data.base_api;
+		bound_predict->secret = stored_model_data.secret;
+
+		stored_model_data.out_names.push_back("vec");
+		stored_model_data.out_types.push_back(LogicalType::ARRAY(LogicalType::FLOAT, 384));
+		for (auto &expr : ref.parsed_input_columns) {
+			if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+				auto &child_colref = expr->Cast<ColumnRefExpression>();
+				if (child_colref.IsQualified()) {
+					throw BinderException(*expr, "EMBED expression cannot contain qualified columns");
 				}
 				stored_model_data.input_set_names.push_back(child_colref.GetColumnName());
 			}

@@ -31,6 +31,15 @@ unique_ptr<TableRef> Transformer::TransformTablePredict(duckdb_libpgquery::PGPre
 		}
 	}
 
+	if (root.embedding) {
+		result->is_embedding = true;
+
+		auto *cr = Transformer::MakePGColumnRef(root.input_col);
+		auto target = PGPointerCast<duckdb_libpgquery::PGNode>(cr);
+		auto expr = TransformExpression(*target);
+		result->parsed_input_columns.push_back(std::move(expr));
+	}
+
 	if (root.source) {
 		result->source = TransformTableRefNode(*root.source);
 	}

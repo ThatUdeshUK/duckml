@@ -42,6 +42,7 @@ CreateModelStmt:
 					$$ = (PGNode *)n;
 				}
 			| llm_model { $$ = $1; }
+			| embed_model { $$ = $1; }
 		;
 
 llm_model:
@@ -75,6 +76,45 @@ llm_model:
 					$7->relpersistence = $4;
 					n->model = $7;
 					n->model_type = 3;
+					n->model_path = $9;
+					n->model_on = $10;
+					n->ownerId = InvalidOid;
+					n->onconflict = PG_REPLACE_ON_CONFLICT;
+					$$ = (PGNode *)n;
+				}
+		;
+
+embed_model:
+			CREATE_P OptTemp EMBED MODEL qualified_name PATH SCONST model_on_embed
+				{
+					PGCreateModelStmt *n = makeNode(PGCreateModelStmt);
+					$5->relpersistence = $2;
+					n->model = $5;
+					n->model_type = 4;
+					n->model_path = $7;
+					n->model_on = $8;
+					n->ownerId = InvalidOid;
+					n->onconflict = PG_ERROR_ON_CONFLICT;
+					$$ = (PGNode *)n;
+				}
+			| CREATE_P OptTemp EMBED MODEL IF_P NOT EXISTS qualified_name PATH SCONST model_on_embed
+				{
+					PGCreateModelStmt *n = makeNode(PGCreateModelStmt);
+					$8->relpersistence = $2;
+					n->model = $8;
+					n->model_type = 4;
+					n->model_path = $10;
+					n->model_on = $11;
+					n->ownerId = InvalidOid;
+					n->onconflict = PG_IGNORE_ON_CONFLICT;
+					$$ = (PGNode *)n;
+				}
+			| CREATE_P OR REPLACE OptTemp EMBED MODEL qualified_name PATH SCONST model_on_embed
+				{
+					PGCreateModelStmt *n = makeNode(PGCreateModelStmt);
+					$7->relpersistence = $4;
+					n->model = $7;
+					n->model_type = 4;
 					n->model_path = $9;
 					n->model_on = $10;
 					n->ownerId = InvalidOid;
@@ -128,6 +168,18 @@ model_on_prompt:
 					n->base_api = $3;
 					n->secret = $4;
 					n->options = $5;
+					$$ = (PGNode *)n;
+				}
+		;
+
+model_on_embed:
+ 			opt_api opt_secret opt_option
+				{
+					PGModelOn *n = makeNode(PGModelOn);
+					n->is_embedding = true;
+					n->base_api = $1;
+					n->secret = $2;
+					n->options = $3;
 					$$ = (PGNode *)n;
 				}
 		;

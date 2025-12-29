@@ -1237,11 +1237,11 @@ typedef struct PGPredictExpr {
     PGNode *source;      	/* the source subtree */
     PGNode *opt_source;  	/* the optional source subtree */
     PGRangeVar *model_name; /* path to the model */
-    char *prompt;    	/* prompt for the llms */
-    PGNode *input_feat;  	/* The input set required by the model */
-    PGNode *opt_feat;	 	/* The input set required by the model */
+    char *prompt;    		/* prompt for the llms */
+    char *input_col;  		/* The input set required by the model */
     PGAlias *alias;      	/* table alias & optional column aliases */
     bool agg;      			/* is semantic aggregate */
+    bool embedding;      	/* is embedding generation */
     int has_opt;    	 	/* has optional sources */
     int location;        	/* token location, or -1 if unknown */
 } PGPredictExpr;
@@ -1802,6 +1802,7 @@ typedef struct PGModelOn {
 	PGList *result_set;  /* The result set produced by the model */
 	PGList *options;	/* The map of options */
     bool on_prompt;  /* The input set required by the model */
+    bool is_embedding;  /* Is this a embedding model */
 	char *base_api; /* the path to the model */
 	PGRangeVar *secret; /* secret of the model */
 } PGModelOn;

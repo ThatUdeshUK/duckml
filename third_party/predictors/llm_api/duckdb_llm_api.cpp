@@ -69,7 +69,7 @@ void LlmApiPredictor::Load(ClientContext &client, const std::string &path, uniqu
 #if OPT_TIMING
 	const steady_clock::time_point begin = steady_clock::now();
 #endif
-	D_ASSERT(this->task == PredictorTask::PREDICT_LLM_TASK);
+	D_ASSERT(this->task == PredictorTask::PREDICT_LLM_TASK || this->task == PredictorTask::PREDICT_EMBED_TASK);
 
 	// This would be the specific model name or API URL.
 	this->model_path = path;
@@ -79,7 +79,9 @@ void LlmApiPredictor::Load(ClientContext &client, const std::string &path, uniqu
 	auto &db = DatabaseInstance::GetDatabase(client);
 	this->api = OpenAI::createInstance(db, base_api, secret);
 
-	GenerateGrammar();
+	if (this->task == PredictorTask::PREDICT_LLM_TASK) {
+		GenerateGrammar();
+	}
 
 #if OPT_TIMING
 	const steady_clock::time_point end = steady_clock::now();
@@ -268,6 +270,64 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 	return std::move(result);
 }
 
+std::unique_ptr<BatchResult> LlmApiPredictor::PredictEmbedBatch(OpenAI &api, const vector<string> &input,
+																const idx_t rows, idx_t batch, idx_t batch_size) {
+	auto result = make_uniq<BatchResult>();
+
+	int tokens = 0;
+	int in_tokens = 0;
+	int out_tokens = 0;
+
+	idx_t frow = batch * batch_size;                // Offset of first row
+	idx_t lrow = std::min(frow + batch_size, rows); // Offset of last row
+	idx_t num_rows = lrow - frow;                   // Number of rows in the batch
+	LLM_LOG( "------------------\nBatch size: " + std::to_string(num_rows) + "\n");
+
+	result->n_rows = num_rows;
+	result->frow = frow;
+
+	nlohmann::json request;
+
+	request["model"] = this->model_path;
+	request["input"] = input;
+	request["dimensions"] = 384;
+
+	auto req_ts = steady_clock::now();
+	auto embeddings = api.post("embeddings", request);
+	auto req_te = steady_clock::now();
+
+	auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+	LLM_LOG( "Batch request time (s):" + std::to_string(req_time) + "\n");
+	if (embeddings.contains("error")) {
+		LLM_LOG( "Batch call failed! Falling back to row wise calls. Error: " + embeddings["error"].get<string>() + "\n");
+		if (embeddings["code"] == 429) {
+			LLM_LOG( "Too much requests!\n");
+		}
+	} else {
+		tokens += embeddings["usage"]["total_tokens"].get<int>();
+		in_tokens += embeddings["usage"]["prompt_tokens"].get<int>();
+
+		result->embeddings.reserve(embeddings["data"].size());
+		for (auto &msg : embeddings["data"]) {
+			if (msg["embedding"].is_array()) {
+				result->embeddings.push_back(msg["embedding"].get<std::vector<float>>());
+			}
+		}
+
+		LLM_LOG( "Batch No: " + std::to_string(batch) + "\n");
+		result->tokens = tokens;
+		result->in_tokens = in_tokens;
+		result->out_tokens = out_tokens;
+		result->time = req_time;
+		result->is_concat = false;
+		result->n_calls = 1;
+		return std::move(result);
+	}
+	result->is_concat = true;
+	result->n_calls = 1;
+	return std::move(result);
+}
+
 std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const string &input, idx_t row) {
 	auto result = make_uniq<BatchResult>();
 
@@ -401,6 +461,12 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	map<string, vector<idx_t>> tuple_id_map {};
 	vector<string> unprocessed {};
 	for (idx_t i = 0; i < rows; ++i) {
+		if (task == PREDICT_EMBED_TASK) {
+			auto key = info.input_mask[0];
+			unprocessed.push_back(input.GetValue(key, i).ToSQLString());
+			continue;
+		}
+
 		const auto embedded = prompt_util.embed_prompt(i, input, info, true);
 		if (auto hit = this->cache.find(embedded); this->use_cache && hit != this->cache.end()) {
 			prompt_util.extract_row_data(hit->second, i, output, info);
@@ -411,7 +477,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		}
 	}
 
-	if (this->use_cache) {
+	if (this->use_cache && task == PREDICT_LLM_TASK) {
 		for (auto &[embedding, tuple_ids] : tuple_id_map) {
 			unprocessed.push_back(embedding);
 		}
@@ -439,6 +505,12 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		steady_clock::time_point b_ts = steady_clock::now();
 		for (size_t run = 0; run < n_threads && (batch + run) * batch_size < unprocessed_rows; run++) {
 			idx_t batch_i = batch + run;
+			if (task == PREDICT_EMBED_TASK) {
+				futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictEmbedBatch, this, std::ref(*api.get()),
+										 std::ref(unprocessed), unprocessed_rows, batch_i, batch_size));
+				continue;
+			}
+
 			futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictBatch, this, std::ref(*api.get()),
 										 std::ref(unprocessed), unprocessed_rows, batch_i, batch_size));
 		}
@@ -468,16 +540,54 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 				}
 			} else {
 				const auto n_rows = result->n_rows;
-				for (size_t i = 0; i < n_rows; i++) {
-					const auto unprocessed_idx = frow + i;
-					if (this->use_cache) {
-						const auto unprocessed_row = std::next(tuple_id_map.begin(), unprocessed_idx);
-						this->cache[unprocessed_row->first] = result->outputs[i];
-						for (const auto &tuple_id : unprocessed_row->second) {
-							prompt_util.extract_row_data(result->outputs[i], tuple_id, output, info);
+				if (task == PREDICT_EMBED_TASK) {
+					idx_t col_id;
+					for (size_t j = 0; j < info.result_set_names.size(); j++) {
+						auto col_name = info.result_set_names[j];
+
+						if (col_name == "vec") {
+							col_id = j;
 						}
-					} else {
-						prompt_util.extract_row_data(result->outputs[i], unprocessed_idx, output, info);
+					}
+
+					Vector& array_vector = output.data[col_id];
+
+					Vector& child_vector = ArrayVector::GetEntry(array_vector);
+
+					// child_vector.(embeddings.size() * 384, FlatVector::Data(child_vector));
+
+					auto* raw_data = FlatVector::GetData<float>(child_vector);
+
+					size_t current_offset = 0;
+					for (size_t i = 0; i < result->embeddings.size(); ++i) {
+						if (result->embeddings[i].size() != 384) {
+							throw std::runtime_error("Embedding dimension mismatch! Expected 384.");
+						}
+
+						// Copy the entire 384-float vector into the raw_data buffer
+						std::memcpy(
+							raw_data + current_offset,
+							result->embeddings[i].data(),
+							384 * sizeof(float)
+						);
+						current_offset += 384;
+					}
+
+					// 6. Set the size of the chunk
+					output.SetCardinality(result->embeddings.size());
+				} else {
+					for (size_t i = 0; i < n_rows; i++) {
+						const auto unprocessed_idx = frow + i;
+
+						if (this->use_cache) {
+							const auto unprocessed_row = std::next(tuple_id_map.begin(), unprocessed_idx);
+							this->cache[unprocessed_row->first] = result->outputs[i];
+							for (const auto &tuple_id : unprocessed_row->second) {
+								prompt_util.extract_row_data(result->outputs[i], tuple_id, output, info);
+							}
+						} else {
+							prompt_util.extract_row_data(result->outputs[i], unprocessed_idx, output, info);
+						}
 					}
 				}
 			}

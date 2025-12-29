@@ -48,6 +48,14 @@ unique_ptr<ModelOnInfo> Transformer::TransformModelOn(duckdb_libpgquery::PGModel
 		return n;
 	}
 
+	if (stmt.is_embedding) {
+		if (stmt.base_api)
+			n->base_api = stmt.base_api;
+		if (stmt.secret)
+			n->secret = TransformQualifiedName(*stmt.secret).name;
+		return n;
+	}
+
 	if (stmt.rel_name) {
 		n->rname = TransformQualifiedName(*stmt.rel_name);
 	}
@@ -109,6 +117,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateModel(duckdb_libpgquery:
 	auto model_on = TransformModelOn(PGCast<duckdb_libpgquery::PGModelOn>(*stmt.model_on));
 	if (model_on->on_prompt) {
 		info->on_prompt = true;
+		info->base_api = std::move(model_on->base_api);
+		info->secret = std::move(model_on->secret);
+	} else if (info->model_type == ModelType::EMBED) {
 		info->base_api = std::move(model_on->base_api);
 		info->secret = std::move(model_on->secret);
 	} else {

@@ -19,6 +19,7 @@ enum class ModelType : uint8_t {
     LM,
     GNN,
     LLM,
+	EMBED
 };
 
 } // namespace duckdb

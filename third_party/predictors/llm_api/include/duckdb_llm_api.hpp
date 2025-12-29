@@ -23,9 +23,10 @@ struct BatchResult {
 	idx_t n_calls;
 	bool is_concat;
 	std::vector<std::string> outputs;
+	std::vector<std::vector<float>> embeddings;
 
 	bool Success() const {
-		return n_calls == outputs.size();
+		return n_calls == outputs.size() || n_rows == embeddings.size();
 	}
 };
 
@@ -57,6 +58,8 @@ public:
 	               unique_ptr<PredictStats> &stats) override;
 	std::unique_ptr<BatchResult> PredictBatch(OpenAI &api, const vector<string> &input, const idx_t rows, idx_t batch,
 	                                          idx_t batch_size);
+	std::unique_ptr<BatchResult> PredictEmbedBatch(OpenAI &api, const vector<string> &input, const idx_t rows,
+	                                               idx_t batch, idx_t batch_size);
 	std::unique_ptr<BatchResult> PredictOne(OpenAI &api, const string &input, idx_t row);
 	std::unique_ptr<BatchResult> PredictAgg(OpenAI &api, const string &input);
 

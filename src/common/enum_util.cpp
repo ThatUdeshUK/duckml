@@ -2854,19 +2854,20 @@ const StringUtil::EnumStringLiteral *GetModelTypeValues() {
 		{ static_cast<uint32_t>(ModelType::TABULAR), "TABULAR" },
 		{ static_cast<uint32_t>(ModelType::LM), "LM" },
 		{ static_cast<uint32_t>(ModelType::GNN), "GNN" },
-		{ static_cast<uint32_t>(ModelType::LLM), "LLM" }
+		{ static_cast<uint32_t>(ModelType::LLM), "LLM" },
+		{ static_cast<uint32_t>(ModelType::EMBED), "EMBED" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ModelType>(ModelType value) {
-	return StringUtil::EnumToString(GetModelTypeValues(), 4, "ModelType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetModelTypeValues(), 5, "ModelType", static_cast<uint32_t>(value));
 }
 
 template<>
 ModelType EnumUtil::FromString<ModelType>(const char *value) {
-	return static_cast<ModelType>(StringUtil::StringToEnum(GetModelTypeValues(), 4, "ModelType", value));
+	return static_cast<ModelType>(StringUtil::StringToEnum(GetModelTypeValues(), 5, "ModelType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {

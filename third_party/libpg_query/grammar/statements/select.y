@@ -2987,7 +2987,16 @@ predict_expr:
 					n->prompt = $5;
 					$$ = (PGNode *) n;
 				}
-			| LLM AGG qualified_name '(' PROMPT sprompt ')'
+			| EMBED qualified_name '(' COLUMN name ',' table_ref ')'
+                {
+                    PGPredictExpr *n = makeNode(PGPredictExpr);
+                    n->model_name = $2;
+                    n->input_col = $5;
+                    n->source = $7;
+                    n->embedding = true;
+                    $$ = (PGNode *) n;
+                }
+            | LLM AGG qualified_name '(' PROMPT sprompt ')'
 				{
 					PGPredictExpr *n = makeNode(PGPredictExpr);
 					n->model_name = $3;

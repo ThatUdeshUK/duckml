@@ -23,6 +23,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPredict &op) {
 			return Make<PhysicalPredict>(std::move(op.types), plan, std::move(op.bound_predict));
 		}
 		throw InternalException("Plan Error: Invalid number of child plans");
+	}case ModelType::EMBED: {
+		D_ASSERT(op.children.size() == 1);
+		auto &plan = CreatePlan(*op.children[0]);
+		return Make<PhysicalPredict>(std::move(op.types), plan, std::move(op.bound_predict));
 	}
 	// case ModelType::GNN: {
 	// 	D_ASSERT(op.children.size() == 2);
