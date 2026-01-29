@@ -205,8 +205,9 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 #if IS_SCHEMA
 		std::stringstream sch;
 		sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-		sch << "\"schema\":{\"type\":\"array\",\"minItems\":" << num_rows << ",\"maxItems\":" << num_rows;
-		sch << ",\"items\":" << this->grammar << "}}}";
+		sch << "\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"output_array\"],";
+		sch << "\"strict\":false,\"properties\":{\"output_array\":{\"type\":\"array\",\"minItems\":" << num_rows;
+		sch << ",\"maxItems\":" << num_rows << ",\"items\":" << this->grammar << "}}}}}";
 		auto array_schema = PromptUtil::parse_json(sch.str());
 		request["response_format"] = array_schema;
 #endif
@@ -218,6 +219,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		LLM_LOG( "Batch request time (s):" + std::to_string(req_time) + "\n");
 		if (completion.contains("error")) {
 			LLM_LOG( "Batch call failed! Falling back to row wise calls. Error: " + completion["error"].get<string>() + "\n");
+			LLM_LOG(request.dump());
 			if (completion["code"] == 429) {
 				LLM_LOG( "Too much requests!\n");
 			}

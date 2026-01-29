@@ -120,7 +120,11 @@ public:
 		idx_t failed_from = i;
 		idx_t failed_to = i + n_rows;
 		try {
-			if (auto out_json = nlohmann::json::parse(extract_json(llm_out)); out_json.is_array()) {
+			auto out_json = nlohmann::json::parse(extract_json(llm_out));
+			if (out_json.contains("output_array")) {
+				out_json = out_json["output_array"];
+			}
+			if (out_json.is_array()) {
 				int64_t row = static_cast<int64_t>(i);
 				for (auto it = out_json.begin(); it != out_json.end(); ++it) {
 					const auto unprocessed_row = std::next(unprocessed.begin(), row);
