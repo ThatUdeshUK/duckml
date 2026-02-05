@@ -2,6 +2,18 @@
 
 Experimental in-database LLM and deep-learning inference via native relational prediction operator. Built on top of a high-performance analytical database system, [DuckDB](https://github.com/duckdb/duckdb). 
 
+```bibtex
+@misc{ipdb2026arxiv,
+      title={iPDB -- Optimizing SQL Queries with ML and LLM Predicates}, 
+      author={Udesh Kumarasinghe and Tyler Liu and Chunwei Liu and Walid G. Aref},
+      year={2026},
+      eprint={2601.16432},
+      archivePrefix={arXiv},
+      primaryClass={cs.DB},
+      url={https://arxiv.org/abs/2601.16432}, 
+}
+```
+
 ## Installing the Python package
 
 We release a `duckdb-python` package built with iPDB as the underlying engine. Please fetch the latest version from [Releases](https://github.com/purduedb/iPDb/releases) (i.e., `duckdb-<latest_version>.tar.gz`). To install the Python package, run:
