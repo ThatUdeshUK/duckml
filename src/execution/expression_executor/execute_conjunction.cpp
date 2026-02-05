@@ -3,7 +3,11 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 
+#include <iostream>
 #include <random>
+#include <future>
+
+#define EXECUTE_PARALLEL 0
 
 namespace duckdb {
 
@@ -56,6 +60,10 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, ExpressionState *state_p,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
+#if EXECUTE_PARALLEL == 1
+	return SelectParallel(expr, state_p, sel, count, true_sel, false_sel);
+#endif
+
 	auto &state = state_p->Cast<ConjunctionState>();
 
 	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
@@ -137,6 +145,106 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 		// adapt runtime statistics
 		state.adaptive_filter->EndFilter(filter_state);
 		return result_count;
+	}
+}
+
+idx_t ExpressionExecutor::AsyncSelect(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
+									  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
+	idx_t out = Select(expr, state, sel, count, true_sel, false_sel);
+	// for (idx_t j = 0; j < out; j++) {
+	// 	std::cout << "AsyncSelect- " << " idx- " << j << ", mapping- " << true_sel->get_index(j) << std::endl;
+	// }
+	return out;
+}
+
+idx_t ExpressionExecutor::SelectParallel(const BoundConjunctionExpression &expr, ExpressionState *state_p,
+                                 const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
+                                 SelectionVector *false_sel) {
+	auto &state = state_p->Cast<ConjunctionState>();
+
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		// get runtime statistics
+		auto filter_state = state.adaptive_filter->BeginFilter();
+		const SelectionVector *current_sel = sel;
+		idx_t false_count = 0;
+
+		unique_ptr<SelectionVector> temp_true, temp_false;
+		if (false_sel) {
+			temp_false = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
+		}
+		if (!true_sel) {
+			temp_true = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
+			true_sel = temp_true.get();
+		}
+
+		vector<std::future<idx_t>> futures;
+		// vector<idx_t> futures_i;
+		vector<unique_ptr<SelectionVector>> children_true;
+		for (idx_t i = 0; i < expr.children.size(); i++) {
+			children_true.push_back(make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE));
+		}
+
+		vector<SelectionVector> children_false{expr.children.size(), SelectionVector{STANDARD_VECTOR_SIZE}};
+		vector<idx_t> true_counts{expr.children.size(), 0};
+
+		for (idx_t i = 0; i < expr.children.size(); i++) {
+			// futures_i.push_back(AsyncSelect(*expr.children[state.adaptive_filter->permutation[i]],
+			// 								state.child_states[state.adaptive_filter->permutation[i]].get(),
+			// 								current_sel, count, children_true[i].get(), &children_false[i]));
+
+			// for (idx_t j = 0; j < futures_i[i]; j++) {
+			// 	std::cout << "InLoopFilter- " << i << " , idx- " << j << ", mapping- " << children_true[i]->get_index(j) << std::endl;
+			// }
+			futures.push_back(std::async(std::launch::async, &ExpressionExecutor::AsyncSelect,
+								this, std::cref(*expr.children[state.adaptive_filter->permutation[i]]),
+								state.child_states[state.adaptive_filter->permutation[i]].get(),
+								std::cref(current_sel), count, children_true[i].get(), &children_false[i]));
+		}
+
+		for (idx_t i = 0; i < expr.children.size(); i++) {
+			// idx_t tcount = futures_i[i];
+			idx_t tcount = futures[i].get();
+			idx_t fcount = count - tcount;
+			if (fcount > 0 && false_sel) {
+				// move failing tuples into the false_sel
+				// tuples passed, move them into the actual result vector
+				for (idx_t j = 0; j < fcount; j++) {
+					false_sel->set_index(false_count++, children_false[i].get_index(j));
+				}
+			}
+			true_counts[i] = tcount;
+			// std::cout << "Filtered: " << tcount << std::endl;
+		}
+		idx_t true_count = 0;
+		idx_t lp = 0;
+		idx_t rp = 0;
+		while (lp < true_counts[0] && rp < true_counts[1]) {
+			idx_t lidx = children_true[0]->get_index(lp);
+			idx_t ridx = children_true[1]->get_index(rp);
+			if (lidx == ridx) {
+				// std::cout << "Match: " << lidx << std::endl;
+				true_sel->set_index(true_count, lidx);
+				true_count++;
+				lp++;
+				rp++;
+			} else if (lidx < ridx) {
+				lp++;
+			} else if (ridx < lidx) {
+				rp++;
+			}
+		}
+		// for (idx_t i = 0; i < children_true.size(); i++) {
+		// 	for (idx_t j = 0; j < true_counts[i]; j++) {
+		// 		std::cout << "Filter- " << i << " , idx- " << j << ", mapping- " << children_true[i]->get_index(j) << std::endl;
+		// 		true_sel->set_index(true_count, children_true[i]->get_index(j));
+		// 		true_count++;
+		// 	}
+		// }
+		// adapt runtime statistics
+		state.adaptive_filter->EndFilter(filter_state);
+		return true_count;
+	} else {
+		throw std::runtime_error("Expression executor does not support select_parallel() with !AND");
 	}
 }
 

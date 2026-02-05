@@ -147,30 +147,6 @@ unique_ptr<HTTPParams> HTTPSUtil::InitializeParameters(optional_ptr<FileOpener> 
 	                                 info);
 	FileOpener::TryGetCurrentSetting(opener, "ca_cert_file", result->ca_cert_file, info);
 
-	// HTTP Secret lookups
-	KeyValueSecretReader settings_reader(*opener, info, "http");
-
-	if (string proxy_setting;
-	    settings_reader.TryGetSecretKey<string>("http_proxy", proxy_setting) && !proxy_setting.empty()) {
-		idx_t port;
-		string host;
-		ParseHTTPProxyHost(proxy_setting, host, port);
-		result->http_proxy = host;
-		result->http_proxy_port = port;
-	}
-	settings_reader.TryGetSecretKey<string>("http_proxy_username", result->http_proxy_username);
-	settings_reader.TryGetSecretKey<string>("http_proxy_password", result->http_proxy_password);
-	settings_reader.TryGetSecretKey<string>("bearer_token", result->bearer_token);
-
-	if (Value extra_headers; settings_reader.TryGetSecretKey("extra_http_headers", extra_headers)) {
-		auto children = MapValue::GetChildren(extra_headers);
-		for (const auto &child : children) {
-			auto kv = StructValue::GetChildren(child);
-			D_ASSERT(kv.size() == 2);
-			result->extra_headers[kv[0].GetValue<string>()] = kv[1].GetValue<string>();
-		}
-	}
-
 	return std::move(result);
 }
 

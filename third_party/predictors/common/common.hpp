@@ -15,7 +15,7 @@ public:
 	static std::string extract_json(const std::string &text) {
 		const size_t start = text.find_first_of("{[");
 		if (start == std::string::npos) {
-			throw std::runtime_error("No JSON start found");
+			throw std::runtime_error("No JSON start found: " + text);
 		}
 
 		const char open = text[start];

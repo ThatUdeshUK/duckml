@@ -202,6 +202,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		request["model"] = this->model_path;
 		request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 							   {{"content", rewritten}, {"role", "user"}}};
+		request["temperature"] = 0.2;
 #if IS_SCHEMA
 		std::stringstream sch;
 		sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
@@ -224,6 +225,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 				LLM_LOG( "Too much requests!\n");
 			}
 		} else {
+			LLM_LOG("LLM Output: " + completion.dump());
 			tokens += completion["usage"]["total_tokens"].get<int>();
 			in_tokens += completion["usage"]["prompt_tokens"].get<int>();
 			out_tokens += completion["usage"]["completion_tokens"].get<int>();
