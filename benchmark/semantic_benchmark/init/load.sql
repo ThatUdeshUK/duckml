@@ -13,7 +13,7 @@ COPY movie_info FROM 'benchmark/semantic_benchmark/data/movie_info.csv' (FORMAT 
 COPY "name" FROM 'benchmark/semantic_benchmark/data/name.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
 COPY review FROM 'benchmark/semantic_benchmark/data/review.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
 COPY role_type FROM 'benchmark/semantic_benchmark/data/role_type.csv' (FORMAT 'csv', quote '"', header 1, ESCAPE '"', DELIMITER ',');
+CREATE LLM MODEL gemini PATH 'gemini-2.5-flash' ON PROMPT API 'https://generativelanguage.googleapis.com/v1beta/openai/' SECRET google OPTIONS {"req_per_min": 500};
 
 CREATE LLM MODEL o4mini PATH 'o4-mini' ON PROMPT API 'https://api.openai.com/v1/' SECRET openai OPTIONS {"req_per_min": 500};
-CREATE LLM MODEL gemini PATH 'gemini-2.5-flash' ON PROMPT API 'https://generativelanguage.googleapis.com/v1beta/openai/' SECRET google OPTIONS {"req_per_min": 500};
 CREATE LLM MODEL llama3 PATH 'llama3.1:latest' ON PROMPT API 'https://genai.rcac.purdue.edu/api/' SECRET purdue OPTIONS {"req_per_min": 500};
