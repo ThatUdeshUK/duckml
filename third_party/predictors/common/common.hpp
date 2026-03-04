@@ -162,11 +162,14 @@ public:
 		idx_t failed_from = i;
 		idx_t failed_to = i + n_rows;
 		try {
-			if (auto out_json = nlohmann::json::parse(extract_json(llm_out)); out_json.is_array()) {
+			auto extracted_json = extract_json(llm_out);
+			auto out_json = nlohmann::json::parse(extracted_json);
+			auto out_array = out_json["output_array"];
+			if (out_array.is_array()) {
 				if (resize)
-					output.SetCardinality(out_json.size());
+					output.SetCardinality(out_array.size());
 				idx_t row = i;
-				for (auto it = out_json.begin(); it != out_json.end(); ++it) {
+				for (auto it = out_array.begin(); it != out_array.end(); ++it) {
 					populate_row_data(*it, row, output, info);
 					row++;
 				}
@@ -183,6 +186,9 @@ public:
 			is_fail = true;
 		} catch (const nlohmann::json::parse_error &e) {
 			std::cout << "JSON parse issue: " << e.what() << std::endl;
+			is_fail = true;
+		} catch (const nlohmann::json::type_error &e) {
+			std::cout << "JSON type issue: " << e.what() << ". For: " << llm_out << std::endl;
 			is_fail = true;
 		}
 		if (is_fail) {

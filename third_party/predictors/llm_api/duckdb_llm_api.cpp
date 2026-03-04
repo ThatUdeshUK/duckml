@@ -200,7 +200,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		nlohmann::json request;
 
 		request["model"] = this->model_path;
-		request["temperature"] = 0.5;
+		// request["temperature"] = 0.5;
 		request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 							   {{"content", rewritten}, {"role", "user"}}};
 #if IS_SCHEMA
