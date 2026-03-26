@@ -526,15 +526,20 @@ void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
 	info.name = phys_op.GetName();
 }
 
-void OperatorProfiler::Flush(const PhysicalOperator &phys_op, PredictStats &stats) {
-	auto entry = operator_infos.find(phys_op);
-	if (entry == operator_infos.end()) {
+void QueryProfiler::Flush(const PhysicalOperator &phys_op, const PredictStats &stats) {
+	lock_guard<std::mutex> guard(lock);
+	if (!IsEnabled() || !running) {
 		return;
 	}
-	auto &info = operator_infos.find(phys_op)->second;
-	info.name = phys_op.GetName();
-	info.AddLlmCalls(stats.llm_calls);
-	info.AddTokensUsed(stats.tokens_used);
+
+	auto entry = tree_map.find(phys_op);
+	D_ASSERT(entry != tree_map.end());
+
+	auto &tree_node = entry->second.get();
+	auto &info = tree_node.GetProfilingInfo();
+
+	info.MetricSum<idx_t>(MetricsType::LLM_CALLS, stats.llm_calls);
+	info.MetricSum<idx_t>(MetricsType::LLM_TOKENS, stats.tokens_used);
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {

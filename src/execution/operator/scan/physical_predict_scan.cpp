@@ -106,7 +106,7 @@ SourceResultType PhysicalPredictScan::GetData(ExecutionContext &context, DataChu
 	auto &predictor = *g_state.predictor.get();
 	predictor.ScanChunk(context.client, chunk, predict_info, g_state.stats);
 
-	context.thread.profiler.Flush(*this, *g_state.stats);
+	QueryProfiler::Get(context.client).Flush(*this, *g_state.stats);
 
 	return SourceResultType::FINISHED;
 }

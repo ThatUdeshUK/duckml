@@ -104,7 +104,6 @@ public:
 
 	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
-	DUCKDB_API void Flush(const PhysicalOperator &phys_op, PredictStats &stats);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
 	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
 	DUCKDB_API void AddExtraInfo(InsertionOrderPreservingMap<string> extra_info);
@@ -177,6 +176,8 @@ public:
 
 	DUCKDB_API void StartExplainAnalyze();
 
+	//! Adds LLM stats to this query profiler
+	DUCKDB_API void Flush(const PhysicalOperator &phys_op, const PredictStats &stats);
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.

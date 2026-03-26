@@ -39,7 +39,7 @@ public:
 		//                                        {"predict", stats->predict}, {"move_rev", stats->move_rev},
 		//                                        {"correct", stats->correct}, {"total", stats->total}};
 
-		context.thread.profiler.Flush(op, *stats.get());
+		QueryProfiler::Get(context.client).Flush(op, *stats.get());
 	}
 };
 

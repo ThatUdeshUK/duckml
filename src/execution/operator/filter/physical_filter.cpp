@@ -42,7 +42,8 @@ public:
 		PredictStats predict_stats;
 		predict_stats.llm_calls = counters.llm_calls;
 		predict_stats.tokens_used = counters.tokens_used;
-		context.thread.profiler.Flush(op, predict_stats);
+
+		QueryProfiler::Get(context.client).Flush(op, predict_stats);
 	}
 
 private:
