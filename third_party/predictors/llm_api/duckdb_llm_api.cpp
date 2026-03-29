@@ -10,6 +10,7 @@
 #include <utility>
 #include <future>
 #include <thread>
+#include "../common/indicators.hpp"
 
 #define LLM_USE_THREADS 1
 #define IS_SCHEMA 1
@@ -218,7 +219,9 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		auto req_te = steady_clock::now();
 		auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
 		LLM_LOG( "Batch request time (s):" + std::to_string(req_time) + "\n");
-		if (completion.contains("error")) {
+		if (completion.empty()) {
+			LLM_LOG( "Batch call failed! Falling back to row wise calls. Error: JSON parsing failed!\n");
+		} else if (completion.contains("error")) {
 			LLM_LOG( "Batch call failed! Falling back to row wise calls. Error: " + completion["error"].get<string>() + "\n");
 			LLM_LOG(request.dump());
 			if (completion["code"] == 429) {
@@ -496,6 +499,22 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		LLM_LOG( "Max Batch Size: " + std::to_string(batch_size) + ", Unprocessed: " + std::to_string(unprocessed_rows) + ", Rounds: " + std::to_string(rounds) + "\n");
 	}
 
+	double progress_step = 100.0 / rounds;
+	double progress = 0;
+	int step = 1;
+	indicators::ProgressBar bar{
+		indicators::option::BarWidth{50},
+		indicators::option::Start{"["},
+		indicators::option::Fill{"■"},
+		indicators::option::Lead{"■"},
+		indicators::option::Remainder{"-"},
+		indicators::option::End{" ]"},
+		indicators::option::PostfixText{"LLM Calls (rounds=" + std::to_string(rounds) +",done=0)" ")"},
+		indicators::option::ForegroundColor{indicators::Color::cyan},
+		indicators::option::ShowPercentage{true},
+		indicators::option::FontStyles{std::vector{indicators::FontStyle::bold}}  };
+	bar.set_progress(0);
+
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
 	std::vector<idx_t> batch_fails;
 	size_t total_tokens = 0;
@@ -520,6 +539,10 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		size_t run = 0;
 		for (auto &f : futures) {
 			const auto result = f.get();
+			progress += progress_step;
+			bar.set_progress(progress);
+			bar.set_option(indicators::option::PostfixText{"LLM Calls (rounds=" + std::to_string(rounds) +",step=" + std::to_string(step) +")" ")"});
+			step++;
 			const idx_t frow = result->frow;
 			sub_reqs += result->n_rows;
 			total_calls += result->n_calls;
@@ -736,8 +759,8 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 #if IS_SCHEMA
 	std::stringstream sch;
 	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-	sch << "\"schema\":{\"type\":\"array\"";
-	sch << ",\"items\":" << this->grammar << "}}}";
+	sch << "\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"output_array\"],";
+	sch << "\"strict\":false,\"properties\":{\"output_array\":{\"type\":\"array\",\"items\":" << this->grammar << "}}}}}";
 	auto array_schema = PromptUtil::parse_json(sch.str());
 	request["response_format"] = array_schema;
 #endif

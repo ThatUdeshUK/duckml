@@ -38,6 +38,7 @@ unique_ptr<TableRef> TablePredictRef::Copy() {
 	}
 	copy->model_name = model_name;
 	copy->prompt = prompt;
+	copy->is_embedding = is_embedding;
 	copy->parsed_input_columns.reserve(parsed_input_columns.size());
 	for (auto &child : parsed_input_columns) {
 		copy->parsed_input_columns.push_back(child->Copy());
