@@ -6,7 +6,9 @@ namespace duckdb {
 // TablePredictRef
 //===--------------------------------------------------------------------===//
 string TablePredictRef::ToString() const {
-	string result = source->ToString();
+	string result = "";
+	if (source)
+		result += source->ToString();
 	result += " PREDICT USING " + model_name;
 	return result;
 }

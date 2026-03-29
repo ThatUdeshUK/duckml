@@ -512,7 +512,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		indicators::option::PostfixText{"LLM Calls (rounds=" + std::to_string(rounds) +",done=0)" ")"},
 		indicators::option::ForegroundColor{indicators::Color::cyan},
 		indicators::option::ShowPercentage{true},
-		indicators::option::FontStyles{std::vector{indicators::FontStyle::bold}}  };
+		indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}  };
 	bar.set_progress(0);
 
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
