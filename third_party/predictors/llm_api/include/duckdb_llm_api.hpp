@@ -62,6 +62,7 @@ public:
 	                                               idx_t batch, idx_t batch_size);
 	std::unique_ptr<BatchResult> PredictOne(OpenAI &api, const string &input, idx_t row);
 	std::unique_ptr<BatchResult> PredictAgg(OpenAI &api, const string &input);
+	vector<string> ApplyOrderStrat(vector<string> &rows, vector<idx_t> &orig_order) const;
 
 private:
 	void GenerateGrammar();

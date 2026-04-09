@@ -198,6 +198,44 @@ public:
 		}
 	}
 
+	static void extract_array_data(const std::string &llm_out, DataChunk &output, const vector<idx_t> &orig_rows,
+	                               const PredictInfo &info, const idx_t n_rows) {
+		bool is_fail = false;
+		idx_t failed_local = 0;
+		try {
+			auto extracted_json = extract_json(llm_out);
+			auto out_json = nlohmann::json::parse(extracted_json);
+			auto out_array = out_json["output_array"];
+			if (out_array.is_array()) {
+				idx_t local_i = 0;
+				for (auto it = out_array.begin(); it != out_array.end() && local_i < n_rows; ++it, ++local_i) {
+					populate_row_data(*it, orig_rows[local_i], output, info);
+				}
+				if (local_i < n_rows) {
+					is_fail = true;
+					failed_local = local_i;
+				}
+			} else {
+				std::cout << "JSON parse issue: Array not found" << std::endl;
+				is_fail = true;
+			}
+		} catch (const std::runtime_error &e) {
+			std::cout << "Runtime error: " << e.what() << std::endl;
+			is_fail = true;
+		} catch (const nlohmann::json::parse_error &e) {
+			std::cout << "JSON parse issue: " << e.what() << std::endl;
+			is_fail = true;
+		} catch (const nlohmann::json::type_error &e) {
+			std::cout << "JSON type issue: " << e.what() << std::endl;
+			is_fail = true;
+		}
+		if (is_fail) {
+			for (idx_t i = failed_local; i < n_rows; ++i) {
+				fill_null(orig_rows[i], output, info);
+			}
+		}
+	}
+
 	static void extract_row_data(const std::string &llm_out, const idx_t row, DataChunk &output,
 	                             const PredictInfo &info) {
 		try {

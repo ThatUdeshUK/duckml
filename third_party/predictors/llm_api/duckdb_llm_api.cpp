@@ -439,6 +439,34 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictAgg(OpenAI &api, const stri
 	return std::move(result);
 }
 
+vector<string> LlmApiPredictor::ApplyOrderStrat(vector<string> &rows, vector<idx_t> &orig_order) const {
+	// Build index array sorted by descending string length
+	vector<idx_t> indices(rows.size());
+	std::iota(indices.begin(), indices.end(), 0);
+	std::sort(indices.begin(), indices.end(), [&rows](idx_t a, idx_t b) {
+		return rows[a].size() > rows[b].size();
+	});
+
+	// Apply same rotation pattern to indices
+	vector<idx_t> reordered_indices;
+	reordered_indices.reserve(indices.size());
+	for (size_t i = 0; i < indices.size(); ++i) {
+		reordered_indices.push_back(indices[i]);
+		// Rotate by batch_size to distribute to next "batch"
+		std::rotate(reordered_indices.rbegin(), reordered_indices.rbegin() + 1, reordered_indices.rend());
+	}
+
+	// Build reordered strings and populate orig_order mapping: reordered_pos -> original_row
+	orig_order.resize(rows.size());
+	vector<string> reordered;
+	reordered.reserve(rows.size());
+	for (size_t i = 0; i < reordered_indices.size(); ++i) {
+		reordered.push_back(rows[reordered_indices[i]]);
+		orig_order[i] = reordered_indices[i];
+	}
+	return reordered;
+}
+
 /**
  * Infer the models for a chunk (column vectors containing tupes).
  *
@@ -490,13 +518,20 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	}
 
 	idx_t unprocessed_rows = unprocessed.size();
-	idx_t rounds = unprocessed_rows / batch_size;
-	if (unprocessed_rows % batch_size != 0) {
+	idx_t imp_batch_size = batch_size;
+	if (n_threads * batch_size > unprocessed_rows) {
+		imp_batch_size = unprocessed_rows / n_threads;
+		if (unprocessed_rows % n_threads > 0)
+			imp_batch_size++;
+	}
+
+	idx_t rounds = unprocessed_rows / imp_batch_size;
+	if (unprocessed_rows % imp_batch_size != 0) {
 		rounds++;
 	}
 
 	if (use_batch) {
-		LLM_LOG( "Max Batch Size: " + std::to_string(batch_size) + ", Unprocessed: " + std::to_string(unprocessed_rows) + ", Rounds: " + std::to_string(rounds) + "\n");
+		LLM_LOG( "Max Batch Size: " + std::to_string(imp_batch_size) + ", Unprocessed: " + std::to_string(unprocessed_rows) + ", Rounds: " + std::to_string(rounds) + "\n");
 	}
 
 	double progress_step = 100.0 / rounds;
@@ -515,6 +550,9 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}  };
 	bar.set_progress(0);
 
+	vector<idx_t> orig_order;
+	unprocessed = ApplyOrderStrat(unprocessed, orig_order);
+
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
 	std::vector<idx_t> batch_fails;
 	size_t total_tokens = 0;
@@ -525,16 +563,16 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	size_t sub_secs = 0;
 	for (size_t batch = 0; batch < rounds; batch = batch + n_threads) {
 		steady_clock::time_point b_ts = steady_clock::now();
-		for (size_t run = 0; run < n_threads && (batch + run) * batch_size < unprocessed_rows; run++) {
+		for (size_t run = 0; run < n_threads && (batch + run) * imp_batch_size < unprocessed_rows; run++) {
 			idx_t batch_i = batch + run;
 			if (task == PREDICT_EMBED_TASK) {
 				futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictEmbedBatch, this, std::ref(*api.get()),
-										 std::ref(unprocessed), unprocessed_rows, batch_i, batch_size));
+										 std::ref(unprocessed), unprocessed_rows, batch_i, imp_batch_size));
 				continue;
 			}
 
 			futures.push_back(std::async(std::launch::async, &LlmApiPredictor::PredictBatch, this, std::ref(*api.get()),
-										 std::ref(unprocessed), unprocessed_rows, batch_i, batch_size));
+										 std::ref(unprocessed), unprocessed_rows, batch_i, imp_batch_size));
 		}
 		size_t run = 0;
 		for (auto &f : futures) {
@@ -562,7 +600,9 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 													   cache[embedded] = llm_out;
 												   });
 				} else {
-					prompt_util.extract_array_data(result->outputs[0], output, frow, info, false, result->n_rows);
+					vector<idx_t> batch_orig_rows(orig_order.begin() + frow,
+					                              orig_order.begin() + frow + result->n_rows);
+					prompt_util.extract_array_data(result->outputs[0], output, batch_orig_rows, info, result->n_rows);
 				}
 			} else {
 				const auto n_rows = result->n_rows;
@@ -612,7 +652,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 								prompt_util.extract_row_data(result->outputs[i], tuple_id, output, info);
 							}
 						} else {
-							prompt_util.extract_row_data(result->outputs[i], unprocessed_idx, output, info);
+							prompt_util.extract_row_data(result->outputs[i], orig_order[unprocessed_idx], output, info);
 						}
 					}
 				}
@@ -650,7 +690,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 						prompt_util.extract_row_data(result->outputs[0], tuple_id, output, info);
 					}
 				} else {
-					prompt_util.extract_row_data(result->outputs[0], unprocessed_idx, output, info);
+					prompt_util.extract_row_data(result->outputs[0], orig_order[unprocessed_idx], output, info);
 				}
 			}/**/
 		}
