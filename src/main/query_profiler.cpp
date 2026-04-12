@@ -539,6 +539,8 @@ void QueryProfiler::Flush(const PhysicalOperator &phys_op, const PredictStats &s
 	auto &info = tree_node.GetProfilingInfo();
 
 	info.MetricSum<idx_t>(MetricsType::LLM_CALLS, stats.llm_calls);
+	info.MetricSum<idx_t>(MetricsType::LLM_INPUTS, stats.inputs_used);
+	info.MetricSum<idx_t>(MetricsType::LLM_OUTPUTS, stats.outputs_used);
 	info.MetricSum<idx_t>(MetricsType::LLM_TOKENS, stats.tokens_used);
 }
 
@@ -563,6 +565,12 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::LLM_CALLS)) {
 			info.MetricSum<idx_t>(MetricsType::LLM_CALLS, node.second.llm_calls);
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::LLM_INPUTS)) {
+			info.MetricSum<idx_t>(MetricsType::LLM_INPUTS, node.second.inputs_used);
+		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::LLM_OUTPUTS)) {
+			info.MetricSum<idx_t>(MetricsType::LLM_OUTPUTS, node.second.outputs_used);
 		}
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::LLM_TOKENS)) {
 			info.MetricSum<idx_t>(MetricsType::LLM_TOKENS, node.second.tokens_used);

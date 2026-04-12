@@ -26,6 +26,8 @@ public:
 	static constexpr const char *ESTIMATED_CARDINALITY = "__estimated_cardinality__";
 	static constexpr const char *TIMING = "__timing__";
 	static constexpr const char *LLM_CALLS = "__llm_calls__";
+	static constexpr const char *LLM_INPUTS = "__inputs_used__";
+	static constexpr const char *LLM_OUTPUTS = "__outputs_used__";
 	static constexpr const char *LLM_TOKENS = "__tokens_used__";
 
 public:

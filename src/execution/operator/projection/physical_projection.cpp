@@ -9,10 +9,12 @@ class ProjectionState : public OperatorState {
 public:
 	explicit ProjectionState(ExecutionContext &context, const vector<unique_ptr<Expression>> &expressions)
 	    : executor(context.client, expressions,
-	               [&](idx_t c, idx_t t) {
-		               this->counters.llm_calls += c;
-		               this->counters.tokens_used += t;
-	               }) {
+	    	[&](idx_t c, idx_t i, idx_t o, idx_t t) {
+				this->counters.llm_calls += c;
+				this->counters.inputs_used += i;
+				this->counters.outputs_used += o;
+				this->counters.tokens_used += t;
+			}) {
 	}
 
 	ExpressionExecutor executor;
@@ -21,6 +23,8 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		PredictStats predict_stats;
 		predict_stats.llm_calls = counters.llm_calls;
+		predict_stats.inputs_used = counters.inputs_used;
+		predict_stats.outputs_used = counters.outputs_used;
 		predict_stats.tokens_used = counters.tokens_used;
 
 		QueryProfiler::Get(context.client).Flush(op, predict_stats);

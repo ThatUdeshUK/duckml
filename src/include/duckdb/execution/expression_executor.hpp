@@ -19,10 +19,12 @@ namespace duckdb {
 class Allocator;
 class ExecutionContext;
 
-typedef std::function<void(idx_t llm_calls, idx_t llm_tokens)> ExpressionProfilerCallback;
+typedef std::function<void(idx_t llm_calls, idx_t llm_inputs, idx_t llm_outputs, idx_t llm_tokens)> ExpressionProfilerCallback;
 
 struct ExpressionProfileCounters {
 	idx_t llm_calls = 0;
+	idx_t inputs_used = 0;
+	idx_t outputs_used = 0;
 	idx_t tokens_used = 0;
 };
 

@@ -29,6 +29,7 @@ public:
 	int limit = -1;
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
+	unique_ptr<GlobalOperatorState> GetGlobalOperatorState(ClientContext &context) const override;
 
 	bool ParallelOperator() const override {
 		return true;

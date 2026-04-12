@@ -125,6 +125,14 @@ static unique_ptr<RenderTreeNode> CreateNode(const ProfilingNode &op) {
 		auto llm_calls = info.GetMetricAsString(MetricsType::LLM_CALLS);
 		result->extra_text[RenderTreeNode::LLM_CALLS] = llm_calls;
 	}
+	if (info.Enabled(info.settings, MetricsType::LLM_INPUTS)) {
+		auto llm_inputs = info.GetMetricAsString(MetricsType::LLM_INPUTS);
+		result->extra_text[RenderTreeNode::LLM_INPUTS] = llm_inputs;
+	}
+	if (info.Enabled(info.settings, MetricsType::LLM_OUTPUTS)) {
+		auto llm_outputs = info.GetMetricAsString(MetricsType::LLM_OUTPUTS);
+		result->extra_text[RenderTreeNode::LLM_OUTPUTS] = llm_outputs;
+	}
 	if (info.Enabled(info.settings, MetricsType::LLM_TOKENS)) {
 		auto llm_calls = info.GetMetricAsString(MetricsType::LLM_TOKENS);
 		result->extra_text[RenderTreeNode::LLM_TOKENS] = llm_calls;

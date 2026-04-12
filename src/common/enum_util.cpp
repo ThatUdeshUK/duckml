@@ -2788,6 +2788,8 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_ROWS_SCANNED), "OPERATOR_ROWS_SCANNED" },
 		{ static_cast<uint32_t>(MetricsType::OPERATOR_TIMING), "OPERATOR_TIMING" },
 		{ static_cast<uint32_t>(MetricsType::LLM_CALLS), "LLM_CALLS" },
+		{ static_cast<uint32_t>(MetricsType::LLM_INPUTS), "LLM_INPUTS" },
+		{ static_cast<uint32_t>(MetricsType::LLM_OUTPUTS), "LLM_OUTPUTS" },
 		{ static_cast<uint32_t>(MetricsType::LLM_TOKENS), "LLM_TOKENS" },
 		{ static_cast<uint32_t>(MetricsType::RESULT_SET_SIZE), "RESULT_SET_SIZE" },
 		{ static_cast<uint32_t>(MetricsType::LATENCY), "LATENCY" },
@@ -2841,12 +2843,12 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
-	return StringUtil::EnumToString(GetMetricsTypeValues(), 58, "MetricsType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricsTypeValues(), 60, "MetricsType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
-	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 58, "MetricsType", value));
+	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 60, "MetricsType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetModelTypeValues() {

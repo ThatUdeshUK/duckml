@@ -47,6 +47,8 @@ struct OperatorInformation {
 	double time = 0;
 	idx_t elements_returned = 0;
 	idx_t tokens_used = 0;
+	idx_t inputs_used = 0;
+	idx_t outputs_used = 0;
 	idx_t llm_calls = 0;
 	idx_t result_set_size = 0;
 	idx_t system_peak_buffer_manager_memory = 0;
@@ -64,6 +66,14 @@ struct OperatorInformation {
 
 	void AddTokensUsed(idx_t n_tokens) {
 		tokens_used += n_tokens;
+	}
+
+	void AddInputsUsed(idx_t n_inputs) {
+		inputs_used += n_inputs;
+	}
+
+	void AddOutputsUsed(idx_t n_outputs) {
+		outputs_used += n_outputs;
 	}
 
 	void AddLlmCalls(idx_t n_llm_calls) {
@@ -121,6 +131,8 @@ private:
 	Profiler op;
 	//! Counters for number of LLM calls and tokens used
 	idx_t llm_calls = 0;
+	idx_t inputs_used = 0;
+	idx_t outputs_used = 0;
 	idx_t tokens_used = 0;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;

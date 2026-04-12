@@ -31,6 +31,8 @@ struct PredictStats {
 	long move_rev;
 
 	idx_t llm_calls;
+	idx_t inputs_used;
+	idx_t outputs_used;
 	idx_t tokens_used;
 
 	long correct;

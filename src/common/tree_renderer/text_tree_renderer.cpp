@@ -291,9 +291,21 @@ void TextTreeRenderer::RenderBoxContent(RenderTree &root, std::ostream &ss, idx_
 					}
 				}
 				if (render_y + 1 == extra_height && render_text.empty()) {
+					auto entry = node->extra_text.find(RenderTreeNode::LLM_INPUTS);
+					if (entry != node->extra_text.end()) {
+						render_text = entry->second + " Prompt Tokens";
+					}
+				}
+				if (render_y + 1 == extra_height && render_text.empty()) {
+					auto entry = node->extra_text.find(RenderTreeNode::LLM_OUTPUTS);
+					if (entry != node->extra_text.end()) {
+						render_text = entry->second + " Completion Tokens";
+					}
+				}
+				if (render_y + 1 == extra_height && render_text.empty()) {
 					auto entry = node->extra_text.find(RenderTreeNode::LLM_TOKENS);
 					if (entry != node->extra_text.end()) {
-						render_text = entry->second + " Tokens";
+						render_text = entry->second + " Total Tokens";
 					}
 				}
 				if (render_y == extra_height && render_text.empty()) {
@@ -506,6 +518,12 @@ void TextTreeRenderer::SplitUpExtraInfo(const InsertionOrderPreservingMap<string
 			if (extra_info.find(RenderTreeNode::LLM_CALLS) != extra_info.end()) {
 				// calls - need to reserve space for calls
 				result.emplace_back();
+				if (extra_info.find(RenderTreeNode::LLM_INPUTS) != extra_info.end()) {
+					result.emplace_back();
+				}
+				if (extra_info.find(RenderTreeNode::LLM_OUTPUTS) != extra_info.end()) {
+					result.emplace_back();
+				}
 				if (extra_info.find(RenderTreeNode::LLM_TOKENS) != extra_info.end()) {
 					result.emplace_back();
 				}

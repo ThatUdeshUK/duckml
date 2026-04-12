@@ -176,6 +176,8 @@ SELECT unnest(res) FROM (
 "EXTRA_INFO": "true"
 "LATENCY": "true"
 "LLM_CALLS": "true"
+"LLM_INPUTS": "true"
+"LLM_OUTPUTS": "true"
 "LLM_TOKENS": "true"
 "OPERATOR_CARDINALITY": "true"
 "OPERATOR_NAME": "true"

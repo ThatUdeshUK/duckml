@@ -25,6 +25,8 @@ metrics = [
     "OPERATOR_ROWS_SCANNED",
     "OPERATOR_TIMING",
     "LLM_CALLS",
+    "LLM_INPUTS",
+    "LLM_OUTPUTS",
     "LLM_TOKENS",
     "RESULT_SET_SIZE",
     "LATENCY",

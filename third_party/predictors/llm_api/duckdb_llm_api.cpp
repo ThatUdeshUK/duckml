@@ -432,6 +432,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictAgg(OpenAI &api, const stri
 	result->outputs.push_back(llm_out);
 
 	result->tokens = completion["usage"]["total_tokens"].get<int>();
+	result->in_tokens = completion["usage"]["prompt_tokens"].get<int>();
+	result->out_tokens = completion["usage"]["completion_tokens"].get<int>();
 	result->time = req_time;
 	result->is_concat = false;
 	result->n_calls = 1;
@@ -551,7 +553,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 	bar.set_progress(0);
 
 	vector<idx_t> orig_order;
-	unprocessed = ApplyOrderStrat(unprocessed, orig_order);
+	// unprocessed = ApplyOrderStrat(unprocessed, orig_order);
 
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
 	std::vector<idx_t> batch_fails;
@@ -704,6 +706,8 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		auto result = PredictBatch(client, api, input, rows, batch, batch_size, info);
 		total_calls += result->calls;
 		total_tokens += result->tokens;
+		total_in_tokens += result->in_tokens;
+		total_out_tokens += result->out_tokens;
 		if (result->is_concat) {
 			prompt_util.extract_array_data(result->outputs[0], output, frow, info, false, result->n_rows);
 		} else {
@@ -725,6 +729,8 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 #endif
 	std::cout << ("Total time (s): " + std::to_string(total_time * 1.0 / 1000000) + "\n");
 	stats->llm_calls += total_calls;
+	stats->inputs_used += total_in_tokens;
+	stats->outputs_used += total_out_tokens;
 	stats->tokens_used += total_tokens;
 }
 
@@ -744,6 +750,8 @@ vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<stri
 #if LLM_USE_THREADS
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
 	size_t total_tokens = 0;
+	size_t total_in_tokens = 0;
+	size_t total_out_tokens = 0;
 	size_t sub_reqs = 0;
 	size_t sub_secs = 0;
 
@@ -757,6 +765,8 @@ vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<stri
 		const auto result = f.get();
 		sub_reqs += result->n_rows;
 		total_tokens += result->tokens;
+		total_in_tokens += result->in_tokens;
+		total_out_tokens += result->out_tokens;
 		output.push_back(result->outputs[0]);
 	}
 	futures.clear();
@@ -768,10 +778,14 @@ vector<string> LlmApiPredictor::PredictString(ClientContext &client, vector<stri
 		auto input_i = input[call];
 		auto result = PredictOne(client, api, input_i, info);
 		total_tokens += result->tokens;
+		total_in_tokens += result->in_tokens;
+		total_out_tokens += result->out_tokens;
 		output.push_back(result->outputs[0]);
 	}
 #endif
 	LLM_LOG( "Total tokens: " + std::to_string(total_tokens) + "\n");
+	LLM_LOG( "Total input tokens: " + std::to_string(total_in_tokens) + "\n");
+	LLM_LOG( "Total output tokens: " + std::to_string(total_out_tokens) + "\n");
 
 #if OPT_TIMING
 	const steady_clock::time_point end = steady_clock::now();
@@ -810,6 +824,8 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	}
 
 	const int tokens = completion["usage"]["total_tokens"].get<int>();
+	const int in_tokens = completion["usage"]["prompt_tokens"].get<int>();
+	const int out_tokens = completion["usage"]["completion_tokens"].get<int>();
 	LLM_LOG( llm_out + "||\n");
 
 	LLM_LOG( "Total tokens: " + std::to_string(tokens) + "\n");
@@ -824,6 +840,8 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 
 	stats->llm_calls += 1;
 	stats->tokens_used += tokens;
+	stats->inputs_used += in_tokens;
+	stats->outputs_used += out_tokens;
 #endif
 }
 

@@ -2,11 +2,15 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include <atomic>
 namespace duckdb {
 
 PhysicalFilter::PhysicalFilter(PhysicalPlan &physical_plan, vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                idx_t estimated_cardinality, const int limit)
     : CachingPhysicalOperator(physical_plan, PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality), limit(limit) {
+	if (limit != -1) {
+		caching_supported = false;
+	}
 
 	D_ASSERT(!select_list.empty());
 	if (select_list.size() == 1) {
@@ -22,12 +26,22 @@ PhysicalFilter::PhysicalFilter(PhysicalPlan &physical_plan, vector<LogicalType> 
 	expression = std::move(conjunction);
 }
 
+class FilterGlobalState : public GlobalOperatorState {
+public:
+	FilterGlobalState() : limit_reached(false) {
+	}
+
+	std::atomic<bool> limit_reached;
+};
+
 class FilterState : public CachingOperatorState {
 public:
 	explicit FilterState(ExecutionContext &context, Expression &expr)
 	    : executor(context.client, expr,
-	               [&](idx_t c, idx_t t) {
+	               [&](idx_t c, idx_t i, idx_t o, idx_t t) {
 		               this->counters.llm_calls += c;
+		               this->counters.inputs_used += i;
+		               this->counters.outputs_used += o;
 		               this->counters.tokens_used += t;
 	               }),
 	      sel(STANDARD_VECTOR_SIZE) {
@@ -41,6 +55,8 @@ public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		PredictStats predict_stats;
 		predict_stats.llm_calls = counters.llm_calls;
+		predict_stats.inputs_used = counters.inputs_used;
+		predict_stats.outputs_used = counters.outputs_used;
 		predict_stats.tokens_used = counters.tokens_used;
 
 		QueryProfiler::Get(context.client).Flush(op, predict_stats);
@@ -54,9 +70,19 @@ unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ExecutionContext &con
 	return make_uniq<FilterState>(context, *expression);
 }
 
+unique_ptr<GlobalOperatorState> PhysicalFilter::GetGlobalOperatorState(ClientContext &context) const {
+	return make_uniq<FilterGlobalState>();
+}
+
 OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                   GlobalOperatorState &gstate, OperatorState &state_p) const {
+                                                   GlobalOperatorState &gstate_p, OperatorState &state_p) const {
+	auto &gstate = gstate_p.Cast<FilterGlobalState>();
 	auto &state = state_p.Cast<FilterState>();
+
+	if (limit != -1 && gstate.limit_reached.load()) {
+		return OperatorResultType::FINISHED;
+	}
+
 	if (limit != -1 && static_cast<idx_t>(limit) < input.size()) {
 		const idx_t LIMIT = static_cast<idx_t>(limit);
 		idx_t BATCH_SIZE = LIMIT * 2;
@@ -84,6 +110,9 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 				BATCH_SIZE *= 2;
 			}
 			// state.tuples_processed += chunk.size();
+		}
+		if (chunk.size() >= static_cast<idx_t>(limit)) {
+			gstate.limit_reached.store(true);
 		}
 		return OperatorResultType::NEED_MORE_INPUT;
 	}

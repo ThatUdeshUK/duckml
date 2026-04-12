@@ -101,8 +101,10 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 	// predictions.data[0].Reference(nullptr);
 
 	if (callback) {
-		callback(pstate.stats->llm_calls, pstate.stats->tokens_used);
+		callback(pstate.stats->llm_calls, pstate.stats->inputs_used, pstate.stats->outputs_used, pstate.stats->tokens_used);
 		pstate.stats->llm_calls = 0;
+		pstate.stats->inputs_used = 0;
+		pstate.stats->outputs_used = 0;
 		pstate.stats->tokens_used = 0;
 	}
 	Verify(expr, result, count);
