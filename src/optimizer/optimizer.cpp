@@ -36,6 +36,7 @@
 #include "duckdb/optimizer/unnest_rewriter.hpp"
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/optimizer/limit_to_predict_filter_propagation.hpp"
+#include "duckdb/optimizer/split_predict_join_to_extract_predicate.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/planner.hpp"
 
@@ -262,6 +263,14 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::LIMIT_TO_PREDICT_FILTER_PROPAGATION, [&]() {
 		LimitToPredictFilterPropagation limit_to_predict_filter_propagation;
 		plan = limit_to_predict_filter_propagation.Optimize(std::move(plan));
+	});
+
+	// std::cout << "LIMIT PROP" << std::endl;
+	// plan->Print();
+
+	RunOptimizer(OptimizerType::SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE, [&]() {
+		SplitPredictJoinToExtractPredicate split_predict(*this);
+		plan = split_predict.Optimize(std::move(plan));
 	});
 
 	// perform sampling pushdown

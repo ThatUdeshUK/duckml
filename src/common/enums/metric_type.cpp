@@ -42,6 +42,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_SUM_REWRITER,
         MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
         MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION,
+        MetricsType::OPTIMIZER_SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE,
         MetricsType::OPTIMIZER_CTE_INLINING,
     };
 }
@@ -119,6 +120,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_LATE_MATERIALIZATION;
         case OptimizerType::LIMIT_TO_PREDICT_FILTER_PROPAGATION:
             return MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION;
+        case OptimizerType::SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE:
+            return MetricsType::OPTIMIZER_SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE;
         case OptimizerType::CTE_INLINING:
             return MetricsType::OPTIMIZER_CTE_INLINING;
        default:
@@ -186,6 +189,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::LATE_MATERIALIZATION;
         case MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION:
             return OptimizerType::LIMIT_TO_PREDICT_FILTER_PROPAGATION;
+        case MetricsType::OPTIMIZER_SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE:
+            return OptimizerType::SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE;
         case MetricsType::OPTIMIZER_CTE_INLINING:
             return OptimizerType::CTE_INLINING;
     default:
@@ -224,6 +229,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_SUM_REWRITER:
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
         case MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION:
+        case MetricsType::OPTIMIZER_SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE:
         case MetricsType::OPTIMIZER_CTE_INLINING:
             return true;
         default:

@@ -6,6 +6,12 @@ add_subdirectory(pushdown)
 add_subdirectory(rule)
 add_subdirectory(statistics)
 
+if(ENABLE_LLM_API)
+  message(STATUS "Added LLM API include directories (optimizer)")
+  include_directories(../../third_party/predictors/llm_api/include)
+  include_directories(../../third_party/predictors/common)
+endif()
+
 add_library_unity(
   duckdb_optimizer
   OBJECT
@@ -38,7 +44,8 @@ add_library_unity(
   unnest_rewriter.cpp
   sampling_pushdown.cpp
   sum_rewriter.cpp
-  limit_to_predict_filter_propagation.cpp)
+  limit_to_predict_filter_propagation.cpp
+  split_predict_join_to_extract_predicate.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)

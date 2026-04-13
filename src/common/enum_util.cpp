@@ -2836,6 +2836,7 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_SUM_REWRITER), "OPTIMIZER_SUM_REWRITER" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_LATE_MATERIALIZATION), "OPTIMIZER_LATE_MATERIALIZATION" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION), "OPTIMIZER_LIMIT_TO_PREDICT_FILTER_PROPAGATION" },
+		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE), "OPTIMIZER_SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE" },
 		{ static_cast<uint32_t>(MetricsType::OPTIMIZER_CTE_INLINING), "OPTIMIZER_CTE_INLINING" }
 	};
 	return values;
@@ -3103,6 +3104,7 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 		{ static_cast<uint32_t>(OptimizerType::SUM_REWRITER), "SUM_REWRITER" },
 		{ static_cast<uint32_t>(OptimizerType::LATE_MATERIALIZATION), "LATE_MATERIALIZATION" },
 		{ static_cast<uint32_t>(OptimizerType::LIMIT_TO_PREDICT_FILTER_PROPAGATION), "LIMIT_TO_PREDICT_FILTER_PROPAGATION" },
+		{ static_cast<uint32_t>(OptimizerType::SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE), "SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE" },
 		{ static_cast<uint32_t>(OptimizerType::CTE_INLINING), "CTE_INLINING" }
 	};
 	return values;
