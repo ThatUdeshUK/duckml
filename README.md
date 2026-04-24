@@ -1,6 +1,9 @@
 # iPDb
 
+
 Experimental in-database LLM and deep-learning inference via native relational prediction operator. Built on top of a high-performance analytical database system, [DuckDB](https://github.com/duckdb/duckdb). 
+
+Read the paper at [arxiv](https://arxiv.org/pdf/2601.16432).
 
 ```bibtex
 @misc{ipdb2026arxiv,
