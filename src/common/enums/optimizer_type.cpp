@@ -40,6 +40,8 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"materialized_cte", OptimizerType::MATERIALIZED_CTE},
     {"sum_rewriter", OptimizerType::SUM_REWRITER},
     {"late_materialization", OptimizerType::LATE_MATERIALIZATION},
+    {"join_decomposition", OptimizerType::SPLIT_PREDICT_JOIN_TO_EXTRACT_PREDICATE},
+    {"limit_to_filter", OptimizerType::LIMIT_TO_PREDICT_FILTER_PROPAGATION},
     {"cte_inlining", OptimizerType::CTE_INLINING},
     {nullptr, OptimizerType::INVALID}};
 
