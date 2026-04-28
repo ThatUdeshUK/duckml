@@ -8,8 +8,10 @@ namespace duckdb {
 unique_ptr<TableRef> Transformer::TransformTablePredict(duckdb_libpgquery::PGPredictExpr &root) {
 	auto result = make_uniq<TablePredictRef>();
 
-	auto qname = TransformQualifiedName(*root.model_name);
-	result->model_name = qname.name;
+	if (root.model_name) {
+		auto qname = TransformQualifiedName(*root.model_name);
+		result->model_name = qname.name;
+	}
 
 	if (root.prompt != nullptr) {
 		result->prompt = root.prompt;

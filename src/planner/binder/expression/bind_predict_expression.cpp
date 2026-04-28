@@ -1,8 +1,7 @@
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/model_catalog_entry.hpp"
 #include "duckdb/parser/expression/predict_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_predict_expression.hpp"
+#include "duckdb/planner/model_selection.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 
 namespace duckdb {
@@ -49,22 +48,8 @@ BindResult ExpressionBinder::BindPredict(PredictExpression &expr, idx_t depth) {
 	auto result = make_uniq<BoundPredictExpression>(expr.out_col_type, std::move(children));
 	result->bound_predict = std::move(bound_predict);
 
-	vector<reference<ModelCatalogEntry>> entries;
-	auto schemas = Catalog::GetAllSchemas(context);
-	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::MODEL_ENTRY, [&](CatalogEntry &entry) {
-			if (auto &item = entry.Cast<ModelCatalogEntry>(); item.name == result->bound_predict->model_name) {
-				entries.push_back(item);
-			}
-		});
-	}
+	auto &stored_model = SelectModelFromCatalog(context, result->bound_predict->prompt, result->bound_predict->model_name);
 
-	if (entries.empty()) {
-		throw BinderException("Model with name \"%s\" does not exist in calatog!",
-				    		   result->bound_predict->model_name.c_str());
-	}
-
-	auto &stored_model = entries[0].get();
 	auto stored_model_data = stored_model.GetData();
 
 	if (!stored_model_data.secret.empty()) {

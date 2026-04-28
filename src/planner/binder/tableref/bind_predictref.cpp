@@ -2,20 +2,15 @@
 #include "duckdb/common/prompt.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_predictref.hpp"
+#include "duckdb/planner/model_selection.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/model_catalog_entry.hpp"
 
 #include <regex>
 #include <iostream>
 #include <algorithm>
 
 namespace duckdb {
-
-struct BindModelData {
-	vector<reference<ModelCatalogEntry>> entries;
-};
 
 unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	auto result = make_uniq<BoundPredictRef>();
@@ -24,21 +19,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 
 	bound_predict->prompt = std::move(ref.prompt);
 
-	auto models = make_uniq<BindModelData>();
-	auto schemas = Catalog::GetAllSchemas(context);
-	for (auto &schema : schemas) {
-		schema.get().Scan(context, CatalogType::MODEL_ENTRY, [&](CatalogEntry &entry) {
-			if (auto &item = entry.Cast<ModelCatalogEntry>(); item.name == bound_predict->model_name) {
-				models->entries.push_back(item);
-			}
-		});
-	}
-
-	if (models->entries.empty()) {
-		throw BinderException("Catalog Error: Model with name `" + bound_predict->model_name + "` does not exist!");
-	}
-
-	auto &stored_model = models->entries[0].get();
+	auto &stored_model = SelectModelFromCatalog(context, bound_predict->prompt, bound_predict->model_name);
 	auto stored_model_data = stored_model.GetData();
 	bound_predict->model_type = stored_model_data.model_type;
 	bound_predict->model_path = stored_model_data.model_path;

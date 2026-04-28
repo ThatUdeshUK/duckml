@@ -605,6 +605,34 @@
         "default_value": "50"
     },
     {
+        "name": "llm_max_tokens",
+        "description": "Max token size used by LMs",
+        "type": "UBIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "llm_no_threads",
+        "description": "Batch size for ML/LLM inference",
+        "type": "UBIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "llm_use_batch",
+        "description": "Toggle to enable/disable row marshaling of LLM calls",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "llm_use_cache",
+        "description": "Toggle to enable/disable deduplication",
+        "type": "BOOLEAN",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "lock_configuration",
         "description": "Whether or not the configuration can be altered",
         "type": "BOOLEAN",
@@ -679,6 +707,20 @@
         "default_value": "1000"
     },
     {
+        "name": "ml_batch_size",
+        "description": "Batch size for ML/LLM inference",
+        "type": "UBIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "model_select_strategy",
+        "description": "Strategy for model selection",
+        "type": "VARCHAR",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "nested_loop_join_threshold",
         "description": "The maximum number of rows on either table to choose a nested loop join",
         "type": "UBIGINT",
@@ -691,6 +733,27 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
+    },
+    {
+        "name": "onnx_execution_mode",
+        "description": "Execution model for ONNX",
+        "type": "UBIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "onnx_inter_tc",
+        "description": "Inter thread count used by ONNX",
+        "type": "UBIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "onnx_intra_tc",
+        "description": "Intra thread count used by ONNX",
+        "type": "UBIGINT",
+        "scope": "local",
+        "custom_implementation": true
     },
     {
         "name": "order_by_non_integer_literal",
@@ -816,6 +879,13 @@
         "name": "progress_bar_time",
         "description": "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar",
         "type": "BIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
+        "name": "pull_predict_filter",
+        "description": "Toggle to enable/disable predict pullup optimization",
+        "type": "BOOLEAN",
         "scope": "local",
         "custom_implementation": true
     },

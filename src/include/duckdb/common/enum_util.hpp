@@ -258,6 +258,8 @@ enum class MetaPipelineType : uint8_t;
 
 enum class MetricsType : uint8_t;
 
+enum class ModelSelectStrategy : uint8_t;
+
 enum class ModelType : uint8_t;
 
 enum class MultiFileColumnMappingMode : uint8_t;
@@ -789,6 +791,9 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
+
+template<>
+const char* EnumUtil::ToChars<ModelSelectStrategy>(ModelSelectStrategy value);
 
 template<>
 const char* EnumUtil::ToChars<ModelType>(ModelType value);
@@ -1417,6 +1422,9 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value);
+
+template<>
+ModelSelectStrategy EnumUtil::FromString<ModelSelectStrategy>(const char *value);
 
 template<>
 ModelType EnumUtil::FromString<ModelType>(const char *value);

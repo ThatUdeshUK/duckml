@@ -135,3 +135,4 @@
 
 %type <node>  predict_expr predict_table
 %type <str> sprompt
+%type <range> opt_model_name

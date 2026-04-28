@@ -36,8 +36,10 @@ duckdb_libpgquery::PGColumnRef* Transformer::MakePGColumnRef(const std::string &
 unique_ptr<ParsedExpression> Transformer::TransformPredict(duckdb_libpgquery::PGPredictExpr &root) {
 	auto result = make_uniq<PredictExpression>();
 
-	auto qname = TransformQualifiedName(*root.model_name);
-	result->model_name = qname.name;
+	if (root.model_name) {
+		auto qname = TransformQualifiedName(*root.model_name);
+		result->model_name = qname.name;
+	}
 
 	if (root.prompt != nullptr)
 		result->prompt = root.prompt;

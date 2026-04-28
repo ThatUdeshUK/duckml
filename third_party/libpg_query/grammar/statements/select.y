@@ -2964,14 +2964,6 @@ predict_expr:
 					n->source = $5;
 					$$ = (PGNode *) n;
 				}
-			| LLM qualified_name '(' PROMPT sprompt ',' table_ref ')'
-				{
-					PGPredictExpr *n = makeNode(PGPredictExpr);
-					n->model_name = $2;
-					n->prompt = $5;
-					n->source = $7;
-					$$ = (PGNode *) n;
-				}
 			| PREDICT '(' qualified_name ',' PROMPT sprompt ',' table_ref ')'
 				{
 					PGPredictExpr *n = makeNode(PGPredictExpr);
@@ -2980,13 +2972,27 @@ predict_expr:
 					n->source = $8;
 					$$ = (PGNode *) n;
 				}
-			| LLM qualified_name '(' PROMPT sprompt ')'
+			| LLM qualified_name PROMPT sprompt
 				{
 					PGPredictExpr *n = makeNode(PGPredictExpr);
 					n->model_name = $2;
-					n->prompt = $5;
+					n->prompt = $4;
 					$$ = (PGNode *) n;
 				}
+            | LLM sprompt
+                {
+                    PGPredictExpr *n = makeNode(PGPredictExpr);
+                    n->prompt = $2;
+                    $$ = (PGNode *) n;
+                }
+            | LLM opt_model_name '(' PROMPT sprompt ON table_ref ')'
+                {
+                    PGPredictExpr *n = makeNode(PGPredictExpr);
+                    n->model_name = $2;
+                    n->prompt = $5;
+                    n->source = $7;
+                    $$ = (PGNode *) n;
+                }
 			| EMBED qualified_name '(' COLUMN name ',' table_ref ')'
                 {
                     PGPredictExpr *n = makeNode(PGPredictExpr);
@@ -2996,7 +3002,7 @@ predict_expr:
                     n->embedding = true;
                     $$ = (PGNode *) n;
                 }
-            | LLM AGG qualified_name '(' PROMPT sprompt ')'
+            | AGG LLM opt_model_name '(' PROMPT sprompt ')'
 				{
 					PGPredictExpr *n = makeNode(PGPredictExpr);
 					n->model_name = $3;
@@ -3014,6 +3020,11 @@ predict_expr:
 					$$ = (PGNode *) n;
 				}
 		;
+
+opt_model_name: qualified_name                      { $$ = $1; }
+            | /*EMPTY*/                     		{ $$ = NULL; }
+        ;
+
 
 predict_table:	
 			predict_expr

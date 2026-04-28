@@ -40,6 +40,7 @@
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/enums/merge_action_type.hpp"
 #include "duckdb/common/enums/metric_type.hpp"
+#include "duckdb/common/enums/model_select_strategy.hpp"
 #include "duckdb/common/enums/model_type.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
@@ -2844,12 +2845,30 @@ const StringUtil::EnumStringLiteral *GetMetricsTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
-	return StringUtil::EnumToString(GetMetricsTypeValues(), 60, "MetricsType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMetricsTypeValues(), 61, "MetricsType", static_cast<uint32_t>(value));
 }
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
-	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 60, "MetricsType", value));
+	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 61, "MetricsType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetModelSelectStrategyValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ModelSelectStrategy::FIRST), "FIRST" },
+		{ static_cast<uint32_t>(ModelSelectStrategy::RANDOM), "RANDOM" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ModelSelectStrategy>(ModelSelectStrategy value) {
+	return StringUtil::EnumToString(GetModelSelectStrategyValues(), 2, "ModelSelectStrategy", static_cast<uint32_t>(value));
+}
+
+template<>
+ModelSelectStrategy EnumUtil::FromString<ModelSelectStrategy>(const char *value) {
+	return static_cast<ModelSelectStrategy>(StringUtil::StringToEnum(GetModelSelectStrategyValues(), 2, "ModelSelectStrategy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetModelTypeValues() {
@@ -3112,12 +3131,12 @@ const StringUtil::EnumStringLiteral *GetOptimizerTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
-	return StringUtil::EnumToString(GetOptimizerTypeValues(), 31, "OptimizerType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetOptimizerTypeValues(), 32, "OptimizerType", static_cast<uint32_t>(value));
 }
 
 template<>
 OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
-	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 31, "OptimizerType", value));
+	return static_cast<OptimizerType>(StringUtil::StringToEnum(GetOptimizerTypeValues(), 32, "OptimizerType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetOrderByNullTypeValues() {

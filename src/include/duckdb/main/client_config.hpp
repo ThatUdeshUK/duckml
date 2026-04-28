@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/model_select_strategy.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/progress_bar/progress_bar.hpp"
@@ -114,6 +114,9 @@ struct ClientConfig {
 	//! **DEPRECATED** The file to save query HTTP logging information to, instead of printing it to the console
 	//! (empty = output to the DuckDB logger)
 	string http_logging_output;
+
+	//! Strategy used when no model name is specified and multiple models exist
+	ModelSelectStrategy model_select_strategy = ModelSelectStrategy::FIRST;
 
 	//! Batch size used by the ML operator for inference
 	idx_t ml_batch_size = 16;

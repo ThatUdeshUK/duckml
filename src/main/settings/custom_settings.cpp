@@ -1270,17 +1270,17 @@ Value ProfilingModeSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // ML Batch Size Output
 //===--------------------------------------------------------------------===//
-void MLBatchSizeSetting::ResetLocal(ClientContext &context) {
+void MlBatchSizeSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).ml_batch_size = ClientConfig().ml_batch_size;
 }
 
-void MLBatchSizeSetting::SetLocal(ClientContext &context, const Value &input) {
+void MlBatchSizeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
 	config.ml_batch_size = parameter;
 }
 
-Value MLBatchSizeSetting::GetSetting(const ClientContext &context) {
+Value MlBatchSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.ml_batch_size));
 }
@@ -1288,17 +1288,17 @@ Value MLBatchSizeSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // LLM Number of Threads
 //===--------------------------------------------------------------------===//
-void LLMNoThreadsSetting::ResetLocal(ClientContext &context) {
+void LlmNoThreadsSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).llm_no_threads = ClientConfig().llm_no_threads;
 }
 
-void LLMNoThreadsSetting::SetLocal(ClientContext &context, const Value &input) {
+void LlmNoThreadsSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
 	config.llm_no_threads = parameter;
 }
 
-Value LLMNoThreadsSetting::GetSetting(const ClientContext &context) {
+Value LlmNoThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.llm_no_threads));
 }
@@ -1306,17 +1306,17 @@ Value LLMNoThreadsSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // LLM Use Batch
 //===--------------------------------------------------------------------===//
-void LLMUseBatchSetting::ResetLocal(ClientContext &context) {
+void LlmUseBatchSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).llm_use_batch = ClientConfig().llm_use_batch;
 }
 
-void LLMUseBatchSetting::SetLocal(ClientContext &context, const Value &input) {
+void LlmUseBatchSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
 	config.llm_use_batch = parameter;
 }
 
-Value LLMUseBatchSetting::GetSetting(const ClientContext &context) {
+Value LlmUseBatchSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.llm_use_batch);
 }
@@ -1324,17 +1324,17 @@ Value LLMUseBatchSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // LLM Use Cache
 //===--------------------------------------------------------------------===//
-void LLMUseCacheSetting::ResetLocal(ClientContext &context) {
+void LlmUseCacheSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).llm_use_cache = ClientConfig().llm_use_cache;
 }
 
-void LLMUseCacheSetting::SetLocal(ClientContext &context, const Value &input) {
+void LlmUseCacheSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
 	config.llm_use_cache = parameter;
 }
 
-Value LLMUseCacheSetting::GetSetting(const ClientContext &context) {
+Value LlmUseCacheSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BOOLEAN(config.llm_use_cache);
 }
@@ -1360,35 +1360,54 @@ Value PullPredictFilterSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // LLM Max Tokens Output
 //===--------------------------------------------------------------------===//
-void LLMMaxTokensSetting::ResetLocal(ClientContext &context) {
+void LlmMaxTokensSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).llm_max_tokens = ClientConfig().llm_max_tokens;
 }
 
-void LLMMaxTokensSetting::SetLocal(ClientContext &context, const Value &input) {
+void LlmMaxTokensSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
 	config.llm_max_tokens = parameter;
 }
 
-Value LLMMaxTokensSetting::GetSetting(const ClientContext &context) {
+Value LlmMaxTokensSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.llm_max_tokens));
+}
+
+//===----------------------------------------------------------------------===//
+// Model Select Strategy
+//===----------------------------------------------------------------------===//
+void ModelSelectStrategySetting::SetLocal(ClientContext &context, const Value &input) {
+	auto setting_type = EnumUtil::FromString<ModelSelectStrategy>(input.ToString());
+	auto &config = ClientConfig::GetConfig(context);
+	config.model_select_strategy = setting_type;
+}
+
+void ModelSelectStrategySetting::ResetLocal(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.model_select_strategy = ModelSelectStrategy::FIRST;
+}
+
+Value ModelSelectStrategySetting::GetSetting(const ClientContext &context) {
+	const auto &config = ClientConfig::GetConfig(context);
+	return Value(EnumUtil::ToString(config.model_select_strategy));
 }
 
 //===--------------------------------------------------------------------===//
 // Excecution Mode
 //===--------------------------------------------------------------------===//
-void ONNXExecutionModeSetting::ResetLocal(ClientContext &context) {
+void OnnxExecutionModeSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).onnx_execution_mode = ClientConfig().onnx_execution_mode;
 }
 
-void ONNXExecutionModeSetting::SetLocal(ClientContext &context, const Value &input) {
+void OnnxExecutionModeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
 	config.onnx_execution_mode = parameter;
 }
 
-Value ONNXExecutionModeSetting::GetSetting(const ClientContext &context) {
+Value OnnxExecutionModeSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.onnx_execution_mode));
 }
@@ -1396,17 +1415,17 @@ Value ONNXExecutionModeSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // ONNX Intra Thread Count
 //===--------------------------------------------------------------------===//
-void ONNXIntraTCSetting::ResetLocal(ClientContext &context) {
+void OnnxIntraTcSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).onnx_intra_tc = ClientConfig().onnx_intra_tc;
 }
 
-void ONNXIntraTCSetting::SetLocal(ClientContext &context, const Value &input) {
+void OnnxIntraTcSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
 	config.onnx_intra_tc = parameter;
 }
 
-Value ONNXIntraTCSetting::GetSetting(const ClientContext &context) {
+Value OnnxIntraTcSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.onnx_intra_tc));
 }
@@ -1414,17 +1433,17 @@ Value ONNXIntraTCSetting::GetSetting(const ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // ONNX Inter Thread Count
 //===--------------------------------------------------------------------===//
-void ONNXInterTCSetting::ResetLocal(ClientContext &context) {
+void OnnxInterTcSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).onnx_inter_tc = ClientConfig().onnx_inter_tc;
 }
 
-void ONNXInterTCSetting::SetLocal(ClientContext &context, const Value &input) {
+void OnnxInterTcSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = NumericCast<idx_t>(input.GetValue<int64_t>());
 	config.onnx_inter_tc = parameter;
 }
 
-Value ONNXInterTCSetting::GetSetting(const ClientContext &context) {
+Value OnnxInterTcSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.onnx_inter_tc));
 }
