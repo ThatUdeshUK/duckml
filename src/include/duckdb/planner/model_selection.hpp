@@ -7,6 +7,10 @@
 
 #include <random>
 
+#ifdef ENABLE_PREDICT
+#include "optimal_selector.hpp"
+#endif
+
 namespace duckdb {
 
 class ModelSelector {
@@ -33,6 +37,29 @@ public:
 		return dist(gen);
 	}
 };
+
+#ifdef ENABLE_PREDICT
+// Selects the highest-scoring model using the palimpzest get_optimal_models algorithm:
+// min-max normalised weighted scoring of quality (MMLU-Pro), cost, and latency.
+class OptimalModelSelector : public ModelSelector {
+public:
+	explicit OptimalModelSelector(ScoringPolicy policy) : policy_(std::move(policy)) {
+	}
+
+	int Select(const vector<reference<ModelCatalogEntry>> &entries, const string &prompt) override {
+		std::vector<std::string> paths;
+		paths.reserve(entries.size());
+		for (auto &e : entries) {
+			paths.push_back(e.get().GetData().model_path);
+		}
+		int idx = SelectOptimalModel(paths, policy_);
+		return (idx < 0) ? 0 : idx;
+	}
+
+private:
+	ScoringPolicy policy_;
+};
+#endif // ENABLE_PREDICT
 
 inline ModelCatalogEntry &SelectModelFromCatalog(ClientContext &context, const string &prompt, const string &model_name) {
 	vector<reference<ModelCatalogEntry>> entries;
@@ -66,6 +93,19 @@ inline ModelCatalogEntry &SelectModelFromCatalog(ClientContext &context, const s
 		case ModelSelectStrategy::RANDOM:
 			selector = make_uniq<RandomModelSelector>();
 			break;
+#ifdef ENABLE_PREDICT
+		case ModelSelectStrategy::OPTIMAL: {
+			ScoringPolicy policy;
+			policy.quality_weight = config.model_select_quality_weight;
+			policy.cost_weight    = config.model_select_cost_weight;
+			policy.time_weight    = config.model_select_time_weight;
+			policy.min_quality    = config.model_select_min_quality;
+			policy.max_cost       = config.model_select_max_cost;
+			policy.max_time       = config.model_select_max_time;
+			selector = make_uniq<OptimalModelSelector>(policy);
+			break;
+		}
+#endif
 		default:
 			selector = make_uniq<FirstModelSelector>();
 			break;

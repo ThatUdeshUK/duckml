@@ -2855,20 +2855,21 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 
 const StringUtil::EnumStringLiteral *GetModelSelectStrategyValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ModelSelectStrategy::FIRST), "FIRST" },
-		{ static_cast<uint32_t>(ModelSelectStrategy::RANDOM), "RANDOM" }
+		{ static_cast<uint32_t>(ModelSelectStrategy::FIRST),   "FIRST"   },
+		{ static_cast<uint32_t>(ModelSelectStrategy::RANDOM),  "RANDOM"  },
+		{ static_cast<uint32_t>(ModelSelectStrategy::OPTIMAL), "OPTIMAL" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ModelSelectStrategy>(ModelSelectStrategy value) {
-	return StringUtil::EnumToString(GetModelSelectStrategyValues(), 2, "ModelSelectStrategy", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetModelSelectStrategyValues(), 3, "ModelSelectStrategy", static_cast<uint32_t>(value));
 }
 
 template<>
 ModelSelectStrategy EnumUtil::FromString<ModelSelectStrategy>(const char *value) {
-	return static_cast<ModelSelectStrategy>(StringUtil::StringToEnum(GetModelSelectStrategyValues(), 2, "ModelSelectStrategy", value));
+	return static_cast<ModelSelectStrategy>(StringUtil::StringToEnum(GetModelSelectStrategyValues(), 3, "ModelSelectStrategy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetModelTypeValues() {

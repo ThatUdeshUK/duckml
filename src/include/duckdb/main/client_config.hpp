@@ -118,6 +118,19 @@ struct ClientConfig {
 	//! Strategy used when no model name is specified and multiple models exist
 	ModelSelectStrategy model_select_strategy = ModelSelectStrategy::FIRST;
 
+	//! OPTIMAL strategy: weight applied to MMLU-Pro quality score (default: 1.0 = quality-first)
+	double model_select_quality_weight = 1.0;
+	//! OPTIMAL strategy: weight applied to cost efficiency (lower cost = better)
+	double model_select_cost_weight = 0.0;
+	//! OPTIMAL strategy: weight applied to latency (lower seconds/token = better)
+	double model_select_time_weight = 0.0;
+	//! OPTIMAL strategy: minimum acceptable MMLU-Pro score (0-100); 0 = no constraint
+	double model_select_min_quality = 0.0;
+	//! OPTIMAL strategy: maximum USD per output token; 0 = no constraint
+	double model_select_max_cost = 0.0;
+	//! OPTIMAL strategy: maximum seconds per output token; 0 = no constraint
+	double model_select_max_time = 0.0;
+
 	//! Batch size used by the ML operator for inference
 	idx_t ml_batch_size = 16;
 	

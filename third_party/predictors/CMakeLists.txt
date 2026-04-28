@@ -1,4 +1,6 @@
 if (ENABLE_PREDICT)
+  add_subdirectory(model_selection)
+
   # ### DEPRECATED ###
   # if (${PREDICTOR_IMPL} STREQUAL "torchscript")
   #   add_subdirectory(torchscript)

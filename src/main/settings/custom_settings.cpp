@@ -1394,6 +1394,69 @@ Value ModelSelectStrategySetting::GetSetting(const ClientContext &context) {
 	return Value(EnumUtil::ToString(config.model_select_strategy));
 }
 
+//===----------------------------------------------------------------------===//
+// OPTIMAL Model Selection — policy weights and constraints
+//===----------------------------------------------------------------------===//
+void ModelSelectQualityWeightSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).model_select_quality_weight = input.GetValue<double>();
+}
+void ModelSelectQualityWeightSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).model_select_quality_weight = ClientConfig().model_select_quality_weight;
+}
+Value ModelSelectQualityWeightSetting::GetSetting(const ClientContext &context) {
+	return Value::DOUBLE(ClientConfig::GetConfig(context).model_select_quality_weight);
+}
+
+void ModelSelectCostWeightSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).model_select_cost_weight = input.GetValue<double>();
+}
+void ModelSelectCostWeightSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).model_select_cost_weight = ClientConfig().model_select_cost_weight;
+}
+Value ModelSelectCostWeightSetting::GetSetting(const ClientContext &context) {
+	return Value::DOUBLE(ClientConfig::GetConfig(context).model_select_cost_weight);
+}
+
+void ModelSelectTimeWeightSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).model_select_time_weight = input.GetValue<double>();
+}
+void ModelSelectTimeWeightSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).model_select_time_weight = ClientConfig().model_select_time_weight;
+}
+Value ModelSelectTimeWeightSetting::GetSetting(const ClientContext &context) {
+	return Value::DOUBLE(ClientConfig::GetConfig(context).model_select_time_weight);
+}
+
+void ModelSelectMinQualitySetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).model_select_min_quality = input.GetValue<double>();
+}
+void ModelSelectMinQualitySetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).model_select_min_quality = ClientConfig().model_select_min_quality;
+}
+Value ModelSelectMinQualitySetting::GetSetting(const ClientContext &context) {
+	return Value::DOUBLE(ClientConfig::GetConfig(context).model_select_min_quality);
+}
+
+void ModelSelectMaxCostSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).model_select_max_cost = input.GetValue<double>();
+}
+void ModelSelectMaxCostSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).model_select_max_cost = ClientConfig().model_select_max_cost;
+}
+Value ModelSelectMaxCostSetting::GetSetting(const ClientContext &context) {
+	return Value::DOUBLE(ClientConfig::GetConfig(context).model_select_max_cost);
+}
+
+void ModelSelectMaxTimeSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).model_select_max_time = input.GetValue<double>();
+}
+void ModelSelectMaxTimeSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).model_select_max_time = ClientConfig().model_select_max_time;
+}
+Value ModelSelectMaxTimeSetting::GetSetting(const ClientContext &context) {
+	return Value::DOUBLE(ClientConfig::GetConfig(context).model_select_max_time);
+}
+
 //===--------------------------------------------------------------------===//
 // Excecution Mode
 //===--------------------------------------------------------------------===//

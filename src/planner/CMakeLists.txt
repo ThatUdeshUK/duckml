@@ -1,3 +1,7 @@
+if(ENABLE_PREDICT)
+  include_directories(../../third_party/predictors/model_selection)
+endif()
+
 add_subdirectory(expression)
 add_subdirectory(binder)
 add_subdirectory(expression_binder)

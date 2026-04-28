@@ -965,6 +965,66 @@ struct ModelSelectStrategySetting {
     static Value GetSetting(const ClientContext &context);
 };
 
+struct ModelSelectQualityWeightSetting {
+    using RETURN_TYPE = double;
+    static constexpr const char *Name = "model_select_quality_weight";
+    static constexpr const char *Description = "OPTIMAL strategy: weight for MMLU-Pro quality score (higher = prefer quality)";
+    static constexpr const char *InputType = "DOUBLE";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
+};
+
+struct ModelSelectCostWeightSetting {
+    using RETURN_TYPE = double;
+    static constexpr const char *Name = "model_select_cost_weight";
+    static constexpr const char *Description = "OPTIMAL strategy: weight for cost efficiency (higher = prefer cheaper models)";
+    static constexpr const char *InputType = "DOUBLE";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
+};
+
+struct ModelSelectTimeWeightSetting {
+    using RETURN_TYPE = double;
+    static constexpr const char *Name = "model_select_time_weight";
+    static constexpr const char *Description = "OPTIMAL strategy: weight for latency (higher = prefer faster models)";
+    static constexpr const char *InputType = "DOUBLE";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
+};
+
+struct ModelSelectMinQualitySetting {
+    using RETURN_TYPE = double;
+    static constexpr const char *Name = "model_select_min_quality";
+    static constexpr const char *Description = "OPTIMAL strategy: minimum MMLU-Pro score constraint (0-100); 0 disables constraint";
+    static constexpr const char *InputType = "DOUBLE";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
+};
+
+struct ModelSelectMaxCostSetting {
+    using RETURN_TYPE = double;
+    static constexpr const char *Name = "model_select_max_cost";
+    static constexpr const char *Description = "OPTIMAL strategy: maximum USD per output token; 0 disables constraint";
+    static constexpr const char *InputType = "DOUBLE";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
+};
+
+struct ModelSelectMaxTimeSetting {
+    using RETURN_TYPE = double;
+    static constexpr const char *Name = "model_select_max_time";
+    static constexpr const char *Description = "OPTIMAL strategy: maximum seconds per output token; 0 disables constraint";
+    static constexpr const char *InputType = "DOUBLE";
+    static void SetLocal(ClientContext &context, const Value &parameter);
+    static void ResetLocal(ClientContext &context);
+    static Value GetSetting(const ClientContext &context);
+};
+
 struct NestedLoopJoinThresholdSetting {
     using RETURN_TYPE = idx_t;
     static constexpr const char *Name = "nested_loop_join_threshold";

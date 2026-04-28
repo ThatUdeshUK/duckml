@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-enum class ModelSelectStrategy : uint8_t { FIRST, RANDOM };
+enum class ModelSelectStrategy : uint8_t { FIRST, RANDOM, OPTIMAL };
 
 string ModelSelectStrategyToString(ModelSelectStrategy type);
 ModelSelectStrategy ModelSelectStrategyFromString(const string &str);
