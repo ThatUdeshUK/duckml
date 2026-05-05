@@ -13,6 +13,7 @@
 #include "../common/indicators.hpp"
 
 #define LLM_USE_THREADS 1
+#define LLM_USE_CLUSTER 1   // 1 = semantic/exact-match clustering before LLM calls
 #define IS_SCHEMA 1
 
 #ifdef NDEBUG
@@ -26,7 +27,7 @@
 namespace duckdb {
 LlmApiPredictor::LlmApiPredictor(std::string prompt, std::string base_api, std::string secret)
     : n_predict(0), prompt(std::move(prompt)), base_api(std::move(base_api)), secret(std::move(secret)), n_threads(0),
-      req_per_min(0) {
+      req_per_min(0), cluster_threshold(0.95f) {
 }
 
 /**
@@ -54,6 +55,12 @@ void LlmApiPredictor::Config(const ClientContext &context, const case_insensitiv
 	    options.find("n_threads") != options.end() ? IntegerValue::Get(options.at("n_threads")) : config.llm_no_threads;
 	this->req_per_min =
 	    options.find("req_per_min") != options.end() ? IntegerValue::Get(options.at("req_per_min")) : 500;
+	this->cluster_embed_model = options.find("cluster_embed_model") != options.end()
+	                                ? StringValue::Get(options.at("cluster_embed_model"))
+	                                : "";
+	this->cluster_threshold = options.find("cluster_threshold") != options.end()
+	                              ? static_cast<float>(DoubleValue::Get(options.at("cluster_threshold")))
+	                              : 0.95f;
 	this->n_predict = 64;
 }
 
@@ -166,6 +173,89 @@ std::string LlmApiPredictor::GenerateSystemMessage(const bool is_array) const {
 	       this->grammar + suffix;
 }
 
+// Returns the text content of the first choice in a chat/completions response,
+// or an empty string when no valid content is found.
+static std::string ExtractContent(const nlohmann::json &completion) {
+	if (!completion.contains("choices")) {
+		return {};
+	}
+	for (const auto &msg : completion["choices"]) {
+		if (msg.contains("message") && msg["message"]["content"].is_string()) {
+			return msg["message"]["content"].get<std::string>();
+		}
+	}
+	return {};
+}
+
+// Builds the left/right column-value representation strings for one row of a join input.
+static std::pair<std::string, std::string> BuildJoinRepr(const DataChunk &input, const idx_t row,
+                                                          const idx_t n_left_cols,
+                                                          const PredictInfo &info) {
+	std::stringstream left_ss, right_ss;
+	for (idx_t j = 0; j < n_left_cols; ++j) {
+		left_ss << info.input_set_names[j] << " = `"
+		        << input.GetValue(info.input_mask[j], row).ToSQLString() << "`, ";
+	}
+	for (idx_t j = n_left_cols; j < info.input_mask.size(); ++j) {
+		right_ss << info.input_set_names[j] << " = `"
+		         << input.GetValue(info.input_mask[j], row).ToSQLString() << "`, ";
+	}
+	return {left_ss.str(), right_ss.str()};
+}
+
+nlohmann::json LlmApiPredictor::BuildSingleResponseFormat() const {
+#if IS_SCHEMA
+	std::stringstream sch;
+	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
+	sch << "\"schema\":" << this->grammar << "}}";
+	return PromptUtil::parse_json(sch.str());
+#else
+	return {};
+#endif
+}
+
+// When n_rows > 0, adds minItems/maxItems constraints to the array schema.
+nlohmann::json LlmApiPredictor::BuildArrayResponseFormat(const idx_t n_rows) const {
+#if IS_SCHEMA
+	std::stringstream sch;
+	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
+	sch << "\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"output_array\"],";
+	sch << "\"strict\":false,\"properties\":{\"output_array\":{\"type\":\"array\"";
+	if (n_rows > 0) {
+		sch << ",\"minItems\":" << n_rows << ",\"maxItems\":" << n_rows;
+	}
+	sch << ",\"items\":" << this->grammar << "}}}}}";
+	return PromptUtil::parse_json(sch.str());
+#else
+	return {};
+#endif
+}
+
+void LlmApiPredictor::PropagateSingleResult(const std::string &llm_out, const idx_t unprocessed_idx,
+                                             map<string, vector<idx_t>> &tuple_id_map,
+                                             DataChunk &output, const PredictInfo &info) {
+#if LLM_USE_CLUSTER
+	const auto cluster_it = std::next(tuple_id_map.begin(), static_cast<std::ptrdiff_t>(unprocessed_idx));
+	if (use_cache) {
+		cache[cluster_it->first] = llm_out;
+	}
+	for (const idx_t tuple_id : cluster_it->second) {
+		prompt_util.extract_row_data(llm_out, tuple_id, output, info);
+	}
+#else
+	if (use_cache) {
+		const auto unprocessed_row = std::next(tuple_id_map.begin(),
+		                                       static_cast<std::ptrdiff_t>(unprocessed_idx));
+		cache[unprocessed_row->first] = llm_out;
+		for (const auto &tuple_id : unprocessed_row->second) {
+			prompt_util.extract_row_data(llm_out, tuple_id, output, info);
+		}
+	} else {
+		prompt_util.extract_row_data(llm_out, unprocessed_idx, output, info);
+	}
+#endif
+}
+
 std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const vector<string> &input,
                                                            const idx_t rows, idx_t batch, idx_t batch_size) {
 	auto result = make_uniq<BatchResult>();
@@ -201,18 +291,9 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		nlohmann::json request;
 
 		request["model"] = this->model_path;
-		// request["temperature"] = 0.5;
 		request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 							   {{"content", rewritten}, {"role", "user"}}};
-#if IS_SCHEMA
-		std::stringstream sch;
-		sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-		sch << "\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"output_array\"],";
-		sch << "\"strict\":false,\"properties\":{\"output_array\":{\"type\":\"array\",\"minItems\":" << num_rows;
-		sch << ",\"maxItems\":" << num_rows << ",\"items\":" << this->grammar << "}}}}}";
-		auto array_schema = PromptUtil::parse_json(sch.str());
-		request["response_format"] = array_schema;
-#endif
+		request["response_format"] = BuildArrayResponseFormat(num_rows);
 
 		auto req_ts = steady_clock::now();
 		auto completion = api.post("chat/completions", request);
@@ -232,15 +313,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 			in_tokens += completion["usage"]["prompt_tokens"].get<int>();
 			out_tokens += completion["usage"]["completion_tokens"].get<int>();
 
-			bool content_found = false;
-			for (auto &msg : completion["choices"]) {
-				if (msg["message"]["content"].is_string()) {
-					llm_out = msg["message"]["content"].get<std::string>();
-					content_found = true;
-				}
-			}
-
-			if (content_found) {
+			llm_out = ExtractContent(completion);
+			if (!llm_out.empty()) {
 				LLM_LOG( "Batch No: " + std::to_string(batch) + "\n" + llm_out + "||" + "\n");
 
 				result->outputs.push_back(llm_out);
@@ -344,21 +418,14 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 	idx_t in_tokens = 0;
 	idx_t out_tokens = 0;
 	int64_t total_time = 0;
-	std::string llm_out {};
 
-	std::string rewritten = this->prompt + ";\n" + input;
+	const std::string rewritten = this->prompt + ";\n" + input;
 
 	nlohmann::json request;
 	request["model"] = this->model_path;
 	request["messages"] = {{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
 	                       {{"content", rewritten}, {"role", "user"}}};
-#if IS_SCHEMA
-	std::stringstream sch;
-	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-	sch << "\"schema\":" << this->grammar << "}}";
-	auto array_schema = PromptUtil::parse_json(sch.str());
-	request["response_format"] = array_schema;
-#endif
+	request["response_format"] = BuildSingleResponseFormat();
 
 	auto req_ts = steady_clock::now();
 	auto completion = api.post("chat/completions", request);
@@ -377,15 +444,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 	in_tokens += completion["usage"]["prompt_tokens"].get<int>();
 	out_tokens += completion["usage"]["completion_tokens"].get<int>();
 
-	bool content_found = false;
-	for (auto &msg : completion["choices"]) {
-		if (msg["message"]["content"].is_string()) {
-			llm_out = msg["message"]["content"].get<std::string>();
-			content_found = true;
-		}
-	}
-
-	if (content_found) {
+	const auto llm_out = ExtractContent(completion);
+	if (!llm_out.empty()) {
 		LLM_LOG("Row No: " + std::to_string(row) + "\n" + llm_out + "||\n");
 		result->outputs.push_back(llm_out);
 		result->tokens = tokens;
@@ -424,10 +484,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictAgg(OpenAI &api, const stri
 	const auto req_te = steady_clock::now();
 	const auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
 
-	for (auto &msg : completion["choices"]) {
-		llm_out = msg["message"]["content"].get<std::string>();
-	}
-
+	llm_out = ExtractContent(completion);
 	LLM_LOG( llm_out + "||\n");
 	result->outputs.push_back(llm_out);
 
@@ -469,6 +526,130 @@ vector<string> LlmApiPredictor::ApplyOrderStrat(vector<string> &rows, vector<idx
 	return reordered;
 }
 
+static float cosine_similarity(const std::vector<float> &a, const std::vector<float> &b) {
+	float dot = 0.0f, na = 0.0f, nb = 0.0f;
+	const size_t n = std::min(a.size(), b.size());
+	for (size_t k = 0; k < n; ++k) {
+		dot += a[k] * b[k];
+		na  += a[k] * a[k];
+		nb  += b[k] * b[k];
+	}
+	const float denom = std::sqrt(na) * std::sqrt(nb);
+	return denom > 0.0f ? dot / denom : 0.0f;
+}
+
+// Calls the embeddings endpoint for 'texts' and returns one float vector per entry.
+// Returns an empty vector when cluster_embed_model is unset or the call fails.
+std::vector<std::vector<float>> LlmApiPredictor::EmbedTexts(const std::vector<std::string> &texts) const {
+	if (cluster_embed_model.empty() || texts.empty()) {
+		return {};
+	}
+
+	nlohmann::json request;
+	request["model"] = cluster_embed_model;
+	request["input"] = texts;
+
+	const auto response = api->post("embeddings", request);
+	if (!response.contains("data") || !response["data"].is_array()) {
+		LLM_LOG("EmbedTexts: embeddings call failed or returned no data\n");
+		return {};
+	}
+
+	std::vector<std::vector<float>> embeddings;
+	embeddings.reserve(response["data"].size());
+	for (const auto &entry : response["data"]) {
+		if (entry.contains("embedding") && entry["embedding"].is_array()) {
+			embeddings.push_back(entry["embedding"].get<std::vector<float>>());
+		}
+	}
+	return embeddings;
+}
+
+// Groups rows in 'input' by semantic similarity of their info.input_set_names column values.
+//
+// When cluster_embed_model is set, each row's input columns are concatenated into a plain-text
+// string and sent to the embeddings API.  Rows are then assigned to clusters via greedy
+// cosine-similarity search: a row joins the nearest existing cluster whose representative
+// embedding exceeds cluster_threshold; otherwise a new cluster is started.
+//
+// When cluster_embed_model is empty the function falls back to exact string matching (no API
+// call).  In both cases clusters[i].key holds the embed_prompt string of the representative
+// row and is used for the downstream LLM prompt and cache lookup.
+std::vector<TupleCluster> LlmApiPredictor::GroupByClusters(const DataChunk &input, const idx_t rows,
+                                                           const PredictInfo &info) const {
+	// Build per-row text (for embedding) and formatted key (for LLM prompt + cache).
+	std::vector<std::string> texts;
+	std::vector<std::string> prompt_keys;
+	texts.reserve(rows);
+	prompt_keys.reserve(rows);
+
+	for (idx_t i = 0; i < rows; ++i) {
+		// Plain concatenation of column values used as embedding input.
+		std::stringstream ss;
+		for (idx_t j = 0; j < info.input_mask.size(); ++j) {
+			if (j > 0) {
+				ss << ' ';
+			}
+			ss << input.GetValue(info.input_mask[j], i).ToSQLString();
+		}
+		texts.push_back(ss.str());
+		prompt_keys.push_back(PromptUtil::embed_prompt(i, input, info, /*is_multi=*/true));
+	}
+
+	// Try to get vector embeddings; fall through to exact match on failure.
+	const auto embeddings = EmbedTexts(texts);
+	const bool use_embeddings = (embeddings.size() == rows);
+
+	if (use_embeddings) {
+		LLM_LOG("GroupByClusters: using embedding-based clustering (threshold=" +
+		        std::to_string(cluster_threshold) + ")\n");
+
+		std::vector<TupleCluster> clusters;
+		// Store one centroid embedding per cluster (representative's embedding).
+		std::vector<std::vector<float>> centroids;
+
+		for (idx_t i = 0; i < rows; ++i) {
+			idx_t best_cluster = static_cast<idx_t>(clusters.size()); // sentinel = new cluster
+			float best_sim = cluster_threshold;
+
+			for (idx_t ci = 0; ci < static_cast<idx_t>(clusters.size()); ++ci) {
+				const float sim = cosine_similarity(embeddings[i], centroids[ci]);
+				if (sim > best_sim) {
+					best_sim = sim;
+					best_cluster = ci;
+				}
+			}
+
+			if (best_cluster < static_cast<idx_t>(clusters.size())) {
+				clusters[best_cluster].rows.push_back(i);
+			} else {
+				clusters.push_back({prompt_keys[i], {i}});
+				centroids.push_back(embeddings[i]);
+			}
+		}
+
+		LLM_LOG("GroupByClusters: " + std::to_string(rows) + " rows → " +
+		        std::to_string(clusters.size()) + " clusters\n");
+		return clusters;
+	}
+
+	// Exact-match fallback: group rows with identical prompt keys.
+	LLM_LOG("GroupByClusters: using exact-match clustering (no embed model)\n");
+	std::map<std::string, idx_t> key_to_idx;
+	std::vector<TupleCluster> clusters;
+
+	for (idx_t i = 0; i < rows; ++i) {
+		const std::string &key = prompt_keys[i];
+		auto [it, inserted] = key_to_idx.emplace(key, static_cast<idx_t>(clusters.size()));
+		if (inserted) {
+			clusters.push_back({key, {i}});
+		} else {
+			clusters[it->second].rows.push_back(i);
+		}
+	}
+	return clusters;
+}
+
 /**
  * Infer the models for a chunk (column vectors containing tupes).
  *
@@ -496,13 +677,37 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 #if LLM_USE_THREADS
 	map<string, vector<idx_t>> tuple_id_map {};
 	vector<string> unprocessed {};
+
+#if LLM_USE_CLUSTER
+	if (task == PREDICT_EMBED_TASK) {
+		for (idx_t i = 0; i < rows; ++i) {
+			unprocessed.push_back(input.GetValue(info.input_mask[0], i).ToSQLString());
+		}
+	} else {
+		// Cluster rows by semantic similarity; only the representative per cluster is
+		// sent to the LLM and its result is propagated to all cluster members.
+		const auto clusters = GroupByClusters(input, rows, info);
+		for (const auto &cluster : clusters) {
+			if (auto hit = this->cache.find(cluster.key); this->use_cache && hit != this->cache.end()) {
+				for (const idx_t row : cluster.rows) {
+					prompt_util.extract_row_data(hit->second, row, output, info);
+				}
+				continue;
+			}
+			tuple_id_map[cluster.key] = cluster.rows;
+		}
+		// unprocessed must follow tuple_id_map iteration order (alphabetical by key) so
+		// that frow-based indexing in extract_array_data stays aligned.
+		for (const auto &[key, _] : tuple_id_map) {
+			unprocessed.push_back(key);
+		}
+	}
+#else // !LLM_USE_CLUSTER — original per-row logic, no grouping
 	for (idx_t i = 0; i < rows; ++i) {
 		if (task == PREDICT_EMBED_TASK) {
-			auto key = info.input_mask[0];
-			unprocessed.push_back(input.GetValue(key, i).ToSQLString());
+			unprocessed.push_back(input.GetValue(info.input_mask[0], i).ToSQLString());
 			continue;
 		}
-
 		const auto embedded = prompt_util.embed_prompt(i, input, info, true);
 		if (auto hit = this->cache.find(embedded); this->use_cache && hit != this->cache.end()) {
 			prompt_util.extract_row_data(hit->second, i, output, info);
@@ -512,12 +717,12 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			unprocessed.push_back(embedded);
 		}
 	}
-
 	if (this->use_cache && task == PREDICT_LLM_TASK) {
 		for (auto &[embedding, tuple_ids] : tuple_id_map) {
 			unprocessed.push_back(embedding);
 		}
 	}
+#endif // LLM_USE_CLUSTER
 
 	idx_t unprocessed_rows = unprocessed.size();
 	idx_t imp_batch_size = batch_size;
@@ -552,7 +757,6 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}  };
 	bar.set_progress(0);
 
-	vector<idx_t> orig_order;
 	// unprocessed = ApplyOrderStrat(unprocessed, orig_order);
 
 	std::vector<std::future<std::unique_ptr<BatchResult>>> futures;
@@ -596,16 +800,26 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 					}
 					continue;
 				}
+#if LLM_USE_CLUSTER
+				prompt_util.extract_array_data(result->outputs[0], output, tuple_id_map, frow, info, result->n_rows,
+										   [this](const string &embedded, const string &llm_out) {
+											   if (this->use_cache) { cache[embedded] = llm_out; }
+										   });
+#else
 				if (this->use_cache) {
 					prompt_util.extract_array_data(result->outputs[0], output, tuple_id_map, frow, info, result->n_rows,
-												   [this](const string &embedded, const string &llm_out) {
-													   cache[embedded] = llm_out;
-												   });
+					                               [this](const string &embedded, const string &llm_out) {
+					                                   cache[embedded] = llm_out;
+					                               });
 				} else {
-					vector<idx_t> batch_orig_rows(orig_order.begin() + frow,
-					                              orig_order.begin() + frow + result->n_rows);
+					vector<idx_t> batch_orig_rows;
+					batch_orig_rows.reserve(result->n_rows);
+					for (idx_t k = frow; k < frow + result->n_rows; ++k) {
+						batch_orig_rows.push_back(k);
+					}
 					prompt_util.extract_array_data(result->outputs[0], output, batch_orig_rows, info, result->n_rows);
 				}
+#endif // LLM_USE_CLUSTER
 			} else {
 				const auto n_rows = result->n_rows;
 				if (task == PREDICT_EMBED_TASK) {
@@ -645,17 +859,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 					output.SetCardinality(result->embeddings.size());
 				} else {
 					for (size_t i = 0; i < n_rows; i++) {
-						const auto unprocessed_idx = frow + i;
-
-						if (this->use_cache) {
-							const auto unprocessed_row = std::next(tuple_id_map.begin(), unprocessed_idx);
-							this->cache[unprocessed_row->first] = result->outputs[i];
-							for (const auto &tuple_id : unprocessed_row->second) {
-								prompt_util.extract_row_data(result->outputs[i], tuple_id, output, info);
-							}
-						} else {
-							prompt_util.extract_row_data(result->outputs[i], orig_order[unprocessed_idx], output, info);
-						}
+						PropagateSingleResult(result->outputs[i], frow + i, tuple_id_map, output, info);
 					}
 				}
 			}
@@ -685,16 +889,8 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 			total_out_tokens += result->out_tokens;
 
 			if (result->Success()) {
-				if (this->use_cache) {
-					const auto unprocessed_row = std::next(tuple_id_map.begin(), unprocessed_idx);
-					this->cache[unprocessed_row->first] = result->outputs[0];
-					for (const auto &tuple_id : unprocessed_row->second) {
-						prompt_util.extract_row_data(result->outputs[0], tuple_id, output, info);
-					}
-				} else {
-					prompt_util.extract_row_data(result->outputs[0], orig_order[unprocessed_idx], output, info);
-				}
-			}/**/
+				PropagateSingleResult(result->outputs[0], unprocessed_idx, tuple_id_map, output, info);
+			}
 		}
 		futures.clear();
 		const steady_clock::time_point b_te = steady_clock::now();
@@ -810,18 +1006,9 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	request["model"] = this->model_path;
 	request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 	                       {{"content", rewritten}, {"role", "user"}}};
-#if IS_SCHEMA
-	std::stringstream sch;
-	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-	sch << "\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"output_array\"],";
-	sch << "\"strict\":false,\"properties\":{\"output_array\":{\"type\":\"array\",\"items\":" << this->grammar << "}}}}}";
-	auto array_schema = PromptUtil::parse_json(sch.str());
-	request["response_format"] = array_schema;
-#endif
+	request["response_format"] = BuildArrayResponseFormat();
 	auto completion = api->post("chat/completions", request);
-	for (auto &msg : completion["choices"]) {
-		llm_out = msg["message"]["content"].get<std::string>();
-	}
+	llm_out = ExtractContent(completion);
 
 	const int tokens = completion["usage"]["total_tokens"].get<int>();
 	const int in_tokens = completion["usage"]["prompt_tokens"].get<int>();
@@ -861,24 +1048,40 @@ void LlmApiPredictor::PredictJoin(ClientContext &client, DataChunk &input, DataC
 #endif
 	D_ASSERT(n_left_cols <= info.input_mask.size());
 
+#if LLM_USE_CLUSTER
+	// Step 1: Cluster rows by their full (left+right) input combination so that identical
+	// pairs are processed only once and the LLM result is propagated to all duplicates.
+	const auto clusters = GroupByClusters(input, rows, info);
+
+	// Step 2: Build unique left/right representations from the cluster representatives only.
+	std::map<std::string, idx_t> left_unique_map, right_unique_map;
+	std::vector<std::string> left_unique, right_unique;
+	std::vector<std::pair<idx_t, idx_t>> cluster_pair_ids(clusters.size());
+
+	for (idx_t ci = 0; ci < clusters.size(); ++ci) {
+		auto [left_repr, right_repr] = BuildJoinRepr(input, clusters[ci].rows[0], n_left_cols, info);
+		if (!left_unique_map.count(left_repr)) {
+			left_unique_map[left_repr] = left_unique.size();
+			left_unique.push_back(left_repr);
+		}
+		if (!right_unique_map.count(right_repr)) {
+			right_unique_map[right_repr] = right_unique.size();
+			right_unique.push_back(right_repr);
+		}
+		cluster_pair_ids[ci] = {left_unique_map[left_repr], right_unique_map[right_repr]};
+	}
+
+	LLM_LOG("PredictJoin: " + std::to_string(left_unique.size()) + " unique left, " +
+	        std::to_string(right_unique.size()) + " unique right (" + std::to_string(clusters.size()) +
+	        " unique pairs, " + std::to_string(rows) + " total rows)\n");
+#else // !LLM_USE_CLUSTER — original: iterate every row individually
 	// Step 1: Build unique left/right representations and record each row's (left_id, right_id).
 	std::map<std::string, idx_t> left_unique_map, right_unique_map;
 	std::vector<std::string> left_unique, right_unique;
 	std::vector<std::pair<idx_t, idx_t>> row_ids(rows);
 
 	for (idx_t i = 0; i < rows; ++i) {
-		std::stringstream left_ss, right_ss;
-		for (idx_t j = 0; j < n_left_cols; ++j) {
-			left_ss << info.input_set_names[j] << " = `"
-			        << input.GetValue(info.input_mask[j], i).ToSQLString() << "`, ";
-		}
-		for (idx_t j = n_left_cols; j < info.input_mask.size(); ++j) {
-			right_ss << info.input_set_names[j] << " = `"
-			         << input.GetValue(info.input_mask[j], i).ToSQLString() << "`, ";
-		}
-		const std::string left_repr = left_ss.str();
-		const std::string right_repr = right_ss.str();
-
+		auto [left_repr, right_repr] = BuildJoinRepr(input, i, n_left_cols, info);
 		if (!left_unique_map.count(left_repr)) {
 			left_unique_map[left_repr] = left_unique.size();
 			left_unique.push_back(left_repr);
@@ -891,9 +1094,10 @@ void LlmApiPredictor::PredictJoin(ClientContext &client, DataChunk &input, DataC
 	}
 
 	LLM_LOG("PredictJoin: " + std::to_string(left_unique.size()) + " unique left, " +
-	        std::to_string(right_unique.size()) + " unique right (from " + std::to_string(rows) + " pairs)\n");
+	        std::to_string(right_unique.size()) + " unique right (from " + std::to_string(rows) + " rows)\n");
+#endif // LLM_USE_CLUSTER
 
-	// Step 2: Build the prompt: user's original prompt + enumerated left/right items.
+	// Step 3: Build the prompt: user's original prompt + enumerated left/right items.
 	std::stringstream prompt_ss;
 	prompt_ss << this->prompt << "\n\nLeft items:\n";
 	for (idx_t i = 0; i < left_unique.size(); ++i) {
@@ -939,31 +1143,47 @@ void LlmApiPredictor::PredictJoin(ClientContext &client, DataChunk &input, DataC
 	if (completion.contains("error")) {
 		LLM_LOG("PredictJoin LLM error: " + completion["error"].get<std::string>() + "\n");
 	} else {
-		for (auto &choice : completion["choices"]) {
-			if (choice["message"]["content"].is_string()) {
-				const auto llm_out = choice["message"]["content"].get<std::string>();
-				LLM_LOG("PredictJoin response: " + llm_out + "\n");
-				try {
-					auto response = nlohmann::json::parse(PromptUtil::extract_json(llm_out));
-					if (response.contains("matching_pairs") && response["matching_pairs"].is_array()) {
-						for (auto &pair_entry : response["matching_pairs"]) {
-							const idx_t left_id = pair_entry["left_id"].get<idx_t>();
-							const idx_t right_id = pair_entry["right_id"].get<idx_t>();
-							if (left_id < left_unique.size() && right_id < right_unique.size()) {
-								matched_pairs.insert({left_id, right_id});
-							}
+		const auto llm_out = ExtractContent(completion);
+		if (!llm_out.empty()) {
+			LLM_LOG("PredictJoin response: " + llm_out + "\n");
+			try {
+				auto response = nlohmann::json::parse(PromptUtil::extract_json(llm_out));
+				if (response.contains("matching_pairs") && response["matching_pairs"].is_array()) {
+					for (auto &pair_entry : response["matching_pairs"]) {
+						const idx_t left_id = pair_entry["left_id"].get<idx_t>();
+						const idx_t right_id = pair_entry["right_id"].get<idx_t>();
+						if (left_id < left_unique.size() && right_id < right_unique.size()) {
+							matched_pairs.insert({left_id, right_id});
 						}
 					}
-				} catch (const std::exception &e) {
-					LLM_LOG("PredictJoin parse error: " + std::string(e.what()) + "\n");
 				}
+			} catch (const std::exception &e) {
+				LLM_LOG("PredictJoin parse error: " + std::string(e.what()) + "\n");
 			}
 		}
 	}
 
 	LLM_LOG("PredictJoin: " + std::to_string(matched_pairs.size()) + " matching pairs found\n");
 
-	// Step 6: Populate output — true/value for matched cross-product rows, false/null otherwise.
+	// Step 6: Populate output.
+#if LLM_USE_CLUSTER
+	// Propagate each cluster's match result to all its member rows.
+	for (idx_t ci = 0; ci < clusters.size(); ++ci) {
+		const bool is_match = matched_pairs.count(cluster_pair_ids[ci]) > 0;
+		for (const idx_t row : clusters[ci].rows) {
+			for (size_t j = 0; j < info.result_set_names.size(); ++j) {
+				const auto &output_type = info.result_set_types[j];
+				if (output_type == LogicalTypeId::BOOLEAN) {
+					output.SetValue(j, row, Value(is_match));
+				} else if (is_match) {
+					output.SetValue(j, row, Value(output_type));
+				} else {
+					FlatVector::SetNull(output.data[j], row, true);
+				}
+			}
+		}
+	}
+#else
 	for (idx_t i = 0; i < rows; ++i) {
 		const bool is_match = matched_pairs.count(row_ids[i]) > 0;
 		for (size_t j = 0; j < info.result_set_names.size(); ++j) {
@@ -977,6 +1197,7 @@ void LlmApiPredictor::PredictJoin(ClientContext &client, DataChunk &input, DataC
 			}
 		}
 	}
+#endif // LLM_USE_CLUSTER
 
 	// Update stats.
 	int total_tokens = 0, total_in = 0, total_out = 0;

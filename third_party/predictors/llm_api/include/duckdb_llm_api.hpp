@@ -14,6 +14,13 @@
 
 namespace duckdb {
 
+// A group of semantically similar rows (by cosine similarity of their input-column embeddings).
+// rows[0] is the representative sent to the LLM; its result is propagated to all other members.
+struct TupleCluster {
+	std::string key;    // embed_prompt string of the representative row (used for LLM prompt + cache)
+	vector<idx_t> rows; // rows[0] is the representative
+};
+
 struct BatchResult {
 	size_t tokens;
 	size_t in_tokens;
@@ -41,6 +48,8 @@ public:
 
 	idx_t n_threads;
 	idx_t req_per_min;
+	std::string cluster_embed_model; // embedding model for GroupByClusters; empty = exact match
+	float cluster_threshold;         // cosine-similarity threshold for cluster membership [0, 1]
 
 private:
 	PromptUtil prompt_util;
@@ -67,8 +76,25 @@ public:
 	void PredictJoin(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
 	                 const idx_t n_left_cols, const PredictInfo &info, unique_ptr<PredictStats> &stats) override;
 
+	// Groups rows in 'input' by semantic similarity of their info.input_set_names column values.
+	// Uses the embeddings API (cluster_embed_model) when configured; falls back to exact match.
+	// clusters[i].rows[0] is the representative whose LLM result is propagated to all members.
+	std::vector<TupleCluster> GroupByClusters(const DataChunk &input, idx_t rows, const PredictInfo &info) const;
+
 private:
 	void GenerateGrammar();
 	std::string GenerateSystemMessage(bool is_array) const;
+	// Calls the embeddings endpoint and returns one float vector per input text.
+	// Returns an empty vector on failure (caller falls back to exact-match clustering).
+	std::vector<std::vector<float>> EmbedTexts(const std::vector<std::string> &texts) const;
+	// Build the response_format JSON for a single-object or array schema response.
+	nlohmann::json BuildSingleResponseFormat() const;
+	nlohmann::json BuildArrayResponseFormat(idx_t n_rows = 0) const;
+	// Propagate one LLM output to every row in its cluster (or to the row directly).
+	// Encapsulates the #if LLM_USE_CLUSTER branching that is otherwise duplicated in
+	// the main processing loop and the batch-failure retry loop of PredictChunk.
+	void PropagateSingleResult(const std::string &llm_out, idx_t unprocessed_idx,
+	                           map<string, vector<idx_t>> &tuple_id_map,
+	                           DataChunk &output, const PredictInfo &info);
 };
 } // namespace duckdb
