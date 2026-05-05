@@ -845,4 +845,156 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 #endif
 }
 
+/**
+ * Semantic join optimization: instead of sending every cross-product pair to the LLM,
+ * deduplicate the left and right sides and ask the LLM once which (left_id, right_id)
+ * index pairs match according to the prompt.
+ *
+ * @param n_left_cols number of entries in info.input_mask that belong to the left table
+ *                    (the remaining entries are right-table columns).
+ */
+void LlmApiPredictor::PredictJoin(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
+                                   const idx_t n_left_cols, const PredictInfo &info,
+                                   unique_ptr<PredictStats> &stats) {
+#if OPT_TIMING
+	const steady_clock::time_point begin = steady_clock::now();
+#endif
+	D_ASSERT(n_left_cols <= info.input_mask.size());
+
+	// Step 1: Build unique left/right representations and record each row's (left_id, right_id).
+	std::map<std::string, idx_t> left_unique_map, right_unique_map;
+	std::vector<std::string> left_unique, right_unique;
+	std::vector<std::pair<idx_t, idx_t>> row_ids(rows);
+
+	for (idx_t i = 0; i < rows; ++i) {
+		std::stringstream left_ss, right_ss;
+		for (idx_t j = 0; j < n_left_cols; ++j) {
+			left_ss << info.input_set_names[j] << " = `"
+			        << input.GetValue(info.input_mask[j], i).ToSQLString() << "`, ";
+		}
+		for (idx_t j = n_left_cols; j < info.input_mask.size(); ++j) {
+			right_ss << info.input_set_names[j] << " = `"
+			         << input.GetValue(info.input_mask[j], i).ToSQLString() << "`, ";
+		}
+		const std::string left_repr = left_ss.str();
+		const std::string right_repr = right_ss.str();
+
+		if (!left_unique_map.count(left_repr)) {
+			left_unique_map[left_repr] = left_unique.size();
+			left_unique.push_back(left_repr);
+		}
+		if (!right_unique_map.count(right_repr)) {
+			right_unique_map[right_repr] = right_unique.size();
+			right_unique.push_back(right_repr);
+		}
+		row_ids[i] = {left_unique_map[left_repr], right_unique_map[right_repr]};
+	}
+
+	LLM_LOG("PredictJoin: " + std::to_string(left_unique.size()) + " unique left, " +
+	        std::to_string(right_unique.size()) + " unique right (from " + std::to_string(rows) + " pairs)\n");
+
+	// Step 2: Build the prompt: user's original prompt + enumerated left/right items.
+	std::stringstream prompt_ss;
+	prompt_ss << this->prompt << "\n\nLeft items:\n";
+	for (idx_t i = 0; i < left_unique.size(); ++i) {
+		prompt_ss << "[" << i << "] " << left_unique[i] << "\n";
+	}
+	prompt_ss << "\nRight items:\n";
+	for (idx_t i = 0; i < right_unique.size(); ++i) {
+		prompt_ss << "[" << i << "] " << right_unique[i] << "\n";
+	}
+	prompt_ss << "\nReturn only the (left_id, right_id) index pairs that match according to the prompt above.";
+
+	// Step 3: Fixed JSON schema for the join response.
+	const std::string join_schema =
+	    R"({"type":"object","additionalProperties":false,"required":["matching_pairs"],)"
+	    R"("properties":{"matching_pairs":{"type":"array","items":{"type":"object",)"
+	    R"("additionalProperties":false,"required":["left_id","right_id"],)"
+	    R"("properties":{"left_id":{"type":"integer"},"right_id":{"type":"integer"}}}}}})";
+
+	// Step 4: Make a single LLM call with the deduplicated items.
+	nlohmann::json request;
+	request["model"] = this->model_path;
+	const std::string sys_msg =
+	    R"(You are a data matching assistant. Given enumerated left items and right items, )"
+	    R"(return only the index pairs that match according to the user's criteria. )"
+	    R"(Respond with matching_pairs as an array of {"left_id": <int>, "right_id": <int>} objects. )"
+	    R"(Omit non-matching pairs entirely.)";
+	request["messages"] = {{{"content", sys_msg}, {"role", "system"}},
+	                        {{"content", prompt_ss.str()}, {"role", "user"}}};
+
+	std::stringstream sch;
+	sch << R"({"type":"json_schema","json_schema":{"name":"join_response","strict":true,"schema":)"
+	    << join_schema << "}}";
+	request["response_format"] = PromptUtil::parse_json(sch.str());
+
+	const auto req_ts = steady_clock::now();
+	auto completion = api->post("chat/completions", request);
+	const auto req_te = steady_clock::now();
+	const auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
+	LLM_LOG("PredictJoin request time (s): " + std::to_string(req_time) + "\n");
+
+	// Step 5: Parse the returned matching pair IDs.
+	std::set<std::pair<idx_t, idx_t>> matched_pairs;
+	if (completion.contains("error")) {
+		LLM_LOG("PredictJoin LLM error: " + completion["error"].get<std::string>() + "\n");
+	} else {
+		for (auto &choice : completion["choices"]) {
+			if (choice["message"]["content"].is_string()) {
+				const auto llm_out = choice["message"]["content"].get<std::string>();
+				LLM_LOG("PredictJoin response: " + llm_out + "\n");
+				try {
+					auto response = nlohmann::json::parse(PromptUtil::extract_json(llm_out));
+					if (response.contains("matching_pairs") && response["matching_pairs"].is_array()) {
+						for (auto &pair_entry : response["matching_pairs"]) {
+							const idx_t left_id = pair_entry["left_id"].get<idx_t>();
+							const idx_t right_id = pair_entry["right_id"].get<idx_t>();
+							if (left_id < left_unique.size() && right_id < right_unique.size()) {
+								matched_pairs.insert({left_id, right_id});
+							}
+						}
+					}
+				} catch (const std::exception &e) {
+					LLM_LOG("PredictJoin parse error: " + std::string(e.what()) + "\n");
+				}
+			}
+		}
+	}
+
+	LLM_LOG("PredictJoin: " + std::to_string(matched_pairs.size()) + " matching pairs found\n");
+
+	// Step 6: Populate output — true/value for matched cross-product rows, false/null otherwise.
+	for (idx_t i = 0; i < rows; ++i) {
+		const bool is_match = matched_pairs.count(row_ids[i]) > 0;
+		for (size_t j = 0; j < info.result_set_names.size(); ++j) {
+			const auto &output_type = info.result_set_types[j];
+			if (output_type == LogicalTypeId::BOOLEAN) {
+				output.SetValue(j, i, Value(is_match));
+			} else if (is_match) {
+				output.SetValue(j, i, Value(output_type));
+			} else {
+				FlatVector::SetNull(output.data[j], i, true);
+			}
+		}
+	}
+
+	// Update stats.
+	int total_tokens = 0, total_in = 0, total_out = 0;
+	if (completion.contains("usage")) {
+		total_tokens = completion["usage"]["total_tokens"].get<int>();
+		total_in = completion["usage"]["prompt_tokens"].get<int>();
+		total_out = completion["usage"]["completion_tokens"].get<int>();
+	}
+	std::cout << "PredictJoin - tokens: " + std::to_string(total_tokens) + "\n";
+
+#if OPT_TIMING
+	const steady_clock::time_point end = steady_clock::now();
+	stats->predict += duration_cast<std::chrono::microseconds>(end - begin).count();
+#endif
+	stats->llm_calls += 1;
+	stats->inputs_used += total_in;
+	stats->outputs_used += total_out;
+	stats->tokens_used += total_tokens;
+}
+
 } // namespace duckdb

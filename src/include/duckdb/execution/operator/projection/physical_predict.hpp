@@ -81,6 +81,8 @@ public:
 	virtual void Load(ClientContext &client, const std::string &path, unique_ptr<PredictStats> &stats) {}
 	virtual void PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
 	                          const PredictInfo &info, unique_ptr<PredictStats> &stats) {}
+	virtual void PredictJoin(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
+							  const idx_t n_left_cols, const PredictInfo &info, unique_ptr<PredictStats> &stats) {}
 	virtual void PredictLMChunk(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
 							  const PredictInfo &info, unique_ptr<PredictStats> &stats) {}
 	virtual vector<string> PredictString(ClientContext &client, vector<string> &input, const PredictInfo &info) {

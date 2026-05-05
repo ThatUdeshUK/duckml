@@ -3,6 +3,7 @@
 #include <string>
 #include <memory>
 #include <map>
+#include <set>
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/operator/projection/physical_predict.hpp"
 #include "../../common/common.hpp"
@@ -63,6 +64,8 @@ public:
 	std::unique_ptr<BatchResult> PredictOne(OpenAI &api, const string &input, idx_t row);
 	std::unique_ptr<BatchResult> PredictAgg(OpenAI &api, const string &input);
 	vector<string> ApplyOrderStrat(vector<string> &rows, vector<idx_t> &orig_order) const;
+	void PredictJoin(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
+	                 const idx_t n_left_cols, const PredictInfo &info, unique_ptr<PredictStats> &stats) override;
 
 private:
 	void GenerateGrammar();

@@ -70,6 +70,8 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 	input.InitializeEmpty(state->types); // schema
 	input.SetCardinality(count);
 
+	bool is_join = expr.children.size() == 2;
+	int first_child_cols = 1;
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);
@@ -92,7 +94,11 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 	predictions.data[0].Reference(result);
 	predictions.SetCardinality(count);
 
-	pstate.predictor->PredictChunk(*context, input, predictions, input.size(), pstate.predict_info, pstate.stats);
+	if (is_join) {
+		pstate.predictor->PredictJoin(*context, input, predictions, input.size(), first_child_cols,  pstate.predict_info, pstate.stats);
+	} else {
+		pstate.predictor->PredictChunk(*context, input, predictions, input.size(), pstate.predict_info, pstate.stats);
+	}
 
 	VerifyNullHandling(expr, arguments, result);
 	D_ASSERT(result.GetType() == expr.return_type);
