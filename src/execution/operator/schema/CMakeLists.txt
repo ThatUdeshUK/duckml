@@ -8,6 +8,7 @@ add_library_unity(
   physical_create_type.cpp
   physical_create_sequence.cpp
   physical_create_model.cpp
+  physical_create_embedding.cpp
   physical_create_table.cpp
   physical_create_view.cpp
   physical_create_function.cpp

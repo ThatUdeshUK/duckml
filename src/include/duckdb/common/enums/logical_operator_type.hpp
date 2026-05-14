@@ -87,6 +87,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_CREATE_TYPE = 136,
 	LOGICAL_ATTACH = 137,
 	LOGICAL_DETACH = 138,
+	LOGICAL_CREATE_EMBEDDING = 139,
 
 	// -----------------------------
 	// Explain

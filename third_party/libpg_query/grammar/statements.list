@@ -12,6 +12,7 @@ CreateTypeStmt
 CreateFunctionStmt
 CreateSchemaStmt
 CreateSeqStmt
+CreateEmbeddingStmt
 CreateModelStmt
 CreateStmt
 CommentOnStmt

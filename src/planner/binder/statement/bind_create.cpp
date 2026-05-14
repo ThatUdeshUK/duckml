@@ -18,6 +18,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_data/create_embedding_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
@@ -527,6 +528,35 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = BindCreateSchema(*stmt.info);
 		result.plan =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MODEL, std::move(stmt.info), &schema);
+		break;
+	}
+	case CatalogType::EMBEDDING_ENTRY: {
+		auto &create_embedding_info = stmt.info->Cast<CreateEmbeddingInfo>();
+
+		// Resolve the table the embedding is built on.
+		TableDescription table_description(create_embedding_info.catalog, create_embedding_info.schema,
+		                                   create_embedding_info.table);
+		auto table_ref = make_uniq<BaseTableRef>(table_description);
+		auto bound_table = Bind(*table_ref);
+		if (bound_table->type != TableReferenceType::BASE_TABLE) {
+			throw BinderException("Can only create an embedding on a base table");
+		}
+		auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
+		auto &table = table_binding.table;
+		if (table.temporary) {
+			stmt.info->temporary = true;
+		}
+		properties.RegisterDBModify(table.catalog, context);
+
+		// Verify the column exists on the table.
+		if (!table.ColumnExists(create_embedding_info.column)) {
+			throw BinderException("Column \"%s\" does not exist in table \"%s\"", create_embedding_info.column,
+			                      create_embedding_info.table);
+		}
+
+		auto &schema = BindCreateSchema(*stmt.info);
+		result.plan =
+		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_EMBEDDING, std::move(stmt.info), &schema);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {

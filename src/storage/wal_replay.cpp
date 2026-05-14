@@ -20,6 +20,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_embedding_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
@@ -225,6 +226,9 @@ protected:
 	void ReplayCreateModel();
 	void ReplayDropModel();
 
+	void ReplayCreateEmbedding();
+	void ReplayDropEmbedding();
+
 	void ReplayCreateMacro();
 	void ReplayDropMacro();
 
@@ -419,6 +423,12 @@ void WriteAheadLogDeserializer::ReplayEntry(WALType entry_type) {
 		break;
 	case WALType::DROP_MODEL:
 		ReplayDropModel();
+		break;
+	case WALType::CREATE_EMBEDDING:
+		ReplayCreateEmbedding();
+		break;
+	case WALType::DROP_EMBEDDING:
+		ReplayDropEmbedding();
 		break;
 	case WALType::SEQUENCE_VALUE:
 		ReplaySequenceValue();
@@ -776,6 +786,30 @@ void WriteAheadLogDeserializer::ReplayCreateModel() {
 void WriteAheadLogDeserializer::ReplayDropModel() {
 	DropInfo info;
 	info.type = CatalogType::MODEL_ENTRY;
+	info.schema = deserializer.ReadProperty<string>(101, "schema");
+	info.name = deserializer.ReadProperty<string>(102, "name");
+	if (DeserializeOnly()) {
+		return;
+	}
+
+	catalog.DropEntry(context, info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Embedding
+//===--------------------------------------------------------------------===//
+void WriteAheadLogDeserializer::ReplayCreateEmbedding() {
+	auto entry = deserializer.ReadProperty<unique_ptr<CreateInfo>>(101, "embedding");
+	if (DeserializeOnly()) {
+		return;
+	}
+
+	catalog.CreateEmbedding(context, entry->Cast<CreateEmbeddingInfo>());
+}
+
+void WriteAheadLogDeserializer::ReplayDropEmbedding() {
+	DropInfo info;
+	info.type = CatalogType::EMBEDDING_ENTRY;
 	info.schema = deserializer.ReadProperty<string>(101, "schema");
 	info.name = deserializer.ReadProperty<string>(102, "name");
 	if (DeserializeOnly()) {

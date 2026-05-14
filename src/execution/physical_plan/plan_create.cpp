@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/schema/physical_create_function.hpp"
 #include "duckdb/execution/operator/schema/physical_create_schema.hpp"
 #include "duckdb/execution/operator/schema/physical_create_sequence.hpp"
+#include "duckdb/execution/operator/schema/physical_create_embedding.hpp"
 #include "duckdb/execution/operator/schema/physical_create_model.hpp"
 #include "duckdb/execution/operator/schema/physical_create_type.hpp"
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
@@ -19,6 +20,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_MODEL:
 		return Make<PhysicalCreateModel>(unique_ptr_cast<CreateInfo, CreateModelInfo>(std::move(op.info)),
 		                                      op.estimated_cardinality);
+	case LogicalOperatorType::LOGICAL_CREATE_EMBEDDING:
+		return Make<PhysicalCreateEmbedding>(unique_ptr_cast<CreateInfo, CreateEmbeddingInfo>(std::move(op.info)),
+		                                     op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 		return Make<PhysicalCreateView>(unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(op.info)),
 		                                op.estimated_cardinality);

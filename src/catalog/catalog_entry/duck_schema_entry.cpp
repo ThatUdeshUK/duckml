@@ -10,6 +10,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/model_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/embedding_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
@@ -77,7 +78,7 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
                       catalog.IsSystemCatalog() ? make_uniq<DefaultTableFunctionGenerator>(catalog, *this) : nullptr),
       copy_functions(catalog), pragma_functions(catalog),
       functions(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultFunctionGenerator>(catalog, *this) : nullptr),
-      sequences(catalog), models(catalog),  collations(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
+      sequences(catalog), models(catalog), embeddings(catalog), collations(catalog), types(catalog, make_uniq<DefaultTypeGenerator>(catalog, *this)) {
 }
 
 unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
@@ -230,6 +231,12 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSequence(CatalogTransaction tr
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateModel(CatalogTransaction transaction, CreateModelInfo &info) {
 	auto model = make_uniq<ModelCatalogEntry>(catalog, *this, info);
 	return AddEntry(transaction, std::move(model), info.on_conflict);
+}
+
+optional_ptr<CatalogEntry> DuckSchemaEntry::CreateEmbedding(CatalogTransaction transaction,
+                                                            CreateEmbeddingInfo &info) {
+	auto entry = make_uniq<EmbeddingCatalogEntry>(catalog, *this, info);
+	return AddEntry(transaction, std::move(entry), info.on_conflict);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
@@ -395,6 +402,8 @@ CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
 		return sequences;
 	case CatalogType::MODEL_ENTRY:
 		return models;
+	case CatalogType::EMBEDDING_ENTRY:
+		return embeddings;
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
 	case CatalogType::TYPE_ENTRY:

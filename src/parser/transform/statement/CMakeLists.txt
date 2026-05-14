@@ -40,6 +40,7 @@ add_library_unity(
   transform_use.cpp
   transform_create_sequence.cpp
   transform_create_model.cpp
+  transform_create_embedding.cpp
   transform_vacuum.cpp
   transform_alter_sequence.cpp)
 set(ALL_OBJECT_FILES

@@ -13,6 +13,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/create_embedding_info.hpp"
 #include "duckdb/parser/parsed_data/create_model_info.hpp"
 
 namespace duckdb {
@@ -51,6 +52,9 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		break;
 	case CatalogType::MACRO_ENTRY:
 		result = CreateMacroInfo::Deserialize(deserializer);
+		break;
+	case CatalogType::EMBEDDING_ENTRY:
+		result = CreateEmbeddingInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::MODEL_ENTRY:
 		result = CreateModelInfo::Deserialize(deserializer);
@@ -170,6 +174,29 @@ unique_ptr<CreateInfo> CreateModelInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<bool>(212, "on_prompt", result->on_prompt);
 	deserializer.ReadPropertyWithDefault<string>(213, "base_api", result->base_api);
 	deserializer.ReadPropertyWithDefault<string>(214, "secret", result->secret);
+	return std::move(result);
+}
+
+void CreateEmbeddingInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(200, "embedding_name", embedding_name);
+	serializer.WritePropertyWithDefault<string>(201, "table", table);
+	serializer.WritePropertyWithDefault<string>(202, "column", column);
+	serializer.WritePropertyWithDefault<string>(203, "model_catalog", model_catalog);
+	serializer.WritePropertyWithDefault<string>(204, "model_schema", model_schema);
+	serializer.WritePropertyWithDefault<string>(205, "model_name", model_name);
+	serializer.WritePropertyWithDefault<int32_t>(206, "embedding_size", embedding_size);
+}
+
+unique_ptr<CreateInfo> CreateEmbeddingInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateEmbeddingInfo>(new CreateEmbeddingInfo());
+	deserializer.ReadPropertyWithDefault<string>(200, "embedding_name", result->embedding_name);
+	deserializer.ReadPropertyWithDefault<string>(201, "table", result->table);
+	deserializer.ReadPropertyWithDefault<string>(202, "column", result->column);
+	deserializer.ReadPropertyWithDefault<string>(203, "model_catalog", result->model_catalog);
+	deserializer.ReadPropertyWithDefault<string>(204, "model_schema", result->model_schema);
+	deserializer.ReadPropertyWithDefault<string>(205, "model_name", result->model_name);
+	deserializer.ReadPropertyWithDefault<int32_t>(206, "embedding_size", result->embedding_size);
 	return std::move(result);
 }
 

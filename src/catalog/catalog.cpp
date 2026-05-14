@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_model_info.hpp"
+#include "duckdb/parser/parsed_data/create_embedding_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -197,6 +198,23 @@ optional_ptr<CatalogEntry> Catalog::CreateModel(ClientContext &context, CreateMo
 optional_ptr<CatalogEntry> Catalog::CreateModel(CatalogTransaction transaction, SchemaCatalogEntry &schema,
                                                 CreateModelInfo &info) {
 	return schema.CreateModel(transaction, info);
+}
+
+//===--------------------------------------------------------------------===//
+// Embedding
+//===--------------------------------------------------------------------===//
+optional_ptr<CatalogEntry> Catalog::CreateEmbedding(CatalogTransaction transaction, CreateEmbeddingInfo &info) {
+	auto &schema = GetSchema(transaction, info.schema);
+	return CreateEmbedding(transaction, schema, info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateEmbedding(ClientContext &context, CreateEmbeddingInfo &info) {
+	return CreateEmbedding(GetCatalogTransaction(context), info);
+}
+
+optional_ptr<CatalogEntry> Catalog::CreateEmbedding(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+                                                    CreateEmbeddingInfo &info) {
+	return schema.CreateEmbedding(transaction, info);
 }
 
 //===--------------------------------------------------------------------===//

@@ -19,6 +19,7 @@ add_library_unity(
   create_secret_info.cpp
   create_sequence_info.cpp
   create_model_info.cpp
+  create_embedding_info.cpp
   create_schema_info.cpp
   create_scalar_function_info.cpp
   create_table_function_info.cpp

@@ -1,6 +1,7 @@
 #include "duckdb/transaction/wal_write_state.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/catalog_entry/embedding_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
@@ -49,6 +50,7 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::SEQUENCE_ENTRY:
 	case CatalogType::MODEL_ENTRY:
+	case CatalogType::EMBEDDING_ENTRY:
 	case CatalogType::TYPE_ENTRY:
 	case CatalogType::MACRO_ENTRY:
 	case CatalogType::TABLE_MACRO_ENTRY:
@@ -87,6 +89,10 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			case CatalogType::MODEL_ENTRY:
 				// CREATE MODEL statement
 				log.WriteCreateModel(parent.Cast<ModelCatalogEntry>());
+				break;
+			case CatalogType::EMBEDDING_ENTRY:
+				// CREATE EMBEDDING statement
+				log.WriteCreateEmbedding(parent.Cast<EmbeddingCatalogEntry>());
 				break;
 			case CatalogType::TYPE_ENTRY:
 				// CREATE TYPE statement
@@ -132,6 +138,9 @@ void WALWriteState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			break;
 		case CatalogType::MODEL_ENTRY:
 			log.WriteDropModel(entry.Cast<ModelCatalogEntry>());
+			break;
+		case CatalogType::EMBEDDING_ENTRY:
+			log.WriteDropEmbedding(entry.Cast<EmbeddingCatalogEntry>());
 			break;
 		case CatalogType::MACRO_ENTRY:
 			log.WriteDropMacro(entry.Cast<ScalarMacroCatalogEntry>());

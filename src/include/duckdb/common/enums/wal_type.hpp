@@ -56,6 +56,9 @@ enum class WALType : uint8_t {
 	CREATE_MODEL = 30,
 	DROP_MODEL = 31,
 
+	CREATE_EMBEDDING = 32,
+	DROP_EMBEDDING = 33,
+
 	// -----------------------------
 	// Flush
 	// -----------------------------

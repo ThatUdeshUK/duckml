@@ -1819,6 +1819,20 @@ typedef struct PGCreateModelStmt {
 } PGCreateModelStmt;
 
 /* ----------------------
+ *		CREATE EMBEDDING Statement
+ * ----------------------
+ */
+typedef struct PGCreateEmbeddingStmt {
+	PGNodeTag type;
+	char *embeddingName;            /* name of the embedding index */
+	PGRangeVar *relation;           /* table to build embedding on */
+	char *column;                   /* column to embed */
+	PGRangeVar *embeddingModel;     /* embedding model (qualified name) */
+	int embeddingSize;              /* vector size, or 0 if not specified */
+	PGOnCreateConflict onconflict;  /* what to do on create conflict */
+} PGCreateEmbeddingStmt;
+
+/* ----------------------
  *		CREATE FUNCTION Statement
  * ----------------------
  */

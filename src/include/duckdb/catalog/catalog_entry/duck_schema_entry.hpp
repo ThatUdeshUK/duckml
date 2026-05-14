@@ -34,6 +34,8 @@ private:
 	CatalogSet sequences;
 	//! The catalog set holding the models
 	CatalogSet models;
+	//! The catalog set holding the embedding indexes
+	CatalogSet embeddings;
 	//! The catalog set holding the collations
 	CatalogSet collations;
 	//! The catalog set holding the types
@@ -52,6 +54,7 @@ public:
 	optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction, CreateViewInfo &info) override;
 	optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) override;
 	optional_ptr<CatalogEntry> CreateModel(CatalogTransaction transaction, CreateModelInfo &info) override;
+	optional_ptr<CatalogEntry> CreateEmbedding(CatalogTransaction transaction, CreateEmbeddingInfo &info) override;
 	optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction,
 	                                               CreateTableFunctionInfo &info) override;
 	optional_ptr<CatalogEntry> CreateCopyFunction(CatalogTransaction transaction,

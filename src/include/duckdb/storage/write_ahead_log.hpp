@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/embedding_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/model_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/common/enums/wal_type.hpp"
@@ -87,6 +88,9 @@ public:
 
 	void WriteCreateModel(const ModelCatalogEntry &entry);
 	void WriteDropModel(const ModelCatalogEntry &entry);
+
+	void WriteCreateEmbedding(const EmbeddingCatalogEntry &entry);
+	void WriteDropEmbedding(const EmbeddingCatalogEntry &entry);
 
 	void WriteCreateMacro(const ScalarMacroCatalogEntry &entry);
 	void WriteDropMacro(const ScalarMacroCatalogEntry &entry);

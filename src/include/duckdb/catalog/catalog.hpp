@@ -38,6 +38,7 @@ struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateModelInfo;
+struct CreateEmbeddingInfo;
 struct CreateCollationInfo;
 struct CreateIndexInfo;
 struct CreateTypeInfo;
@@ -171,6 +172,9 @@ public:
 	//! Creates a model in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateModel(CatalogTransaction transaction, CreateModelInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateModel(ClientContext &context, CreateModelInfo &info);
+	//! Creates an embedding index in the catalog.
+	DUCKDB_API optional_ptr<CatalogEntry> CreateEmbedding(CatalogTransaction transaction, CreateEmbeddingInfo &info);
+	DUCKDB_API optional_ptr<CatalogEntry> CreateEmbedding(ClientContext &context, CreateEmbeddingInfo &info);
 	//! Creates a Enum in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, CreateTypeInfo &info);
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(ClientContext &context, CreateTypeInfo &info);
@@ -205,6 +209,9 @@ public:
 	//! Creates a model in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateModel(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                                  CreateModelInfo &info);
+	//! Creates an embedding index in the catalog.
+	DUCKDB_API optional_ptr<CatalogEntry> CreateEmbedding(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                                                      CreateEmbeddingInfo &info);
 	//! Creates a enum in the catalog.
 	DUCKDB_API optional_ptr<CatalogEntry> CreateType(CatalogTransaction transaction, SchemaCatalogEntry &schema,
 	                                                 CreateTypeInfo &info);

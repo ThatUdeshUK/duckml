@@ -32,6 +32,7 @@ struct BoundCreateTableInfo;
 struct CreatePragmaFunctionInfo;
 struct CreateSequenceInfo;
 struct CreateModelInfo;
+struct CreateEmbeddingInfo;
 struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
@@ -73,6 +74,8 @@ public:
 	virtual optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) = 0;
 	//! Creates a model with the given name in the schema
 	virtual optional_ptr<CatalogEntry> CreateModel(CatalogTransaction transaction, CreateModelInfo &info) = 0;
+	//! Creates an embedding index with the given name in the schema
+	virtual optional_ptr<CatalogEntry> CreateEmbedding(CatalogTransaction transaction, CreateEmbeddingInfo &info) = 0;
 	//! Create a table function within the given schema
 	virtual optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction,
 	                                                       CreateTableFunctionInfo &info) = 0;

@@ -349,6 +349,22 @@ void WriteAheadLog::WriteDropModel(const ModelCatalogEntry &entry) {
 }
 
 //===--------------------------------------------------------------------===//
+// EMBEDDINGS
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateEmbedding(const EmbeddingCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::CREATE_EMBEDDING);
+	serializer.WriteProperty(101, "embedding", &entry);
+	serializer.End();
+}
+
+void WriteAheadLog::WriteDropEmbedding(const EmbeddingCatalogEntry &entry) {
+	WriteAheadLogSerializer serializer(*this, WALType::DROP_EMBEDDING);
+	serializer.WriteProperty(101, "schema", entry.schema.name);
+	serializer.WriteProperty(102, "name", entry.name);
+	serializer.End();
+}
+
+//===--------------------------------------------------------------------===//
 // MACROS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMacro(const ScalarMacroCatalogEntry &entry) {
