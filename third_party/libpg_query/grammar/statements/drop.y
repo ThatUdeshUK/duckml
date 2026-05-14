@@ -73,6 +73,7 @@ drop_type_any_name:
 			TABLE									{ $$ = PG_OBJECT_TABLE; }
 			| SEQUENCE								{ $$ = PG_OBJECT_SEQUENCE; }
 			| MODEL									{ $$ = PG_OBJECT_MODEL; }
+			| EMBEDDING								{ $$ = PG_OBJECT_EMBEDDING; }
 			| FUNCTION								{ $$ = PG_OBJECT_FUNCTION; }
 			| MACRO									{ $$ = PG_OBJECT_FUNCTION; }
 			| MACRO TABLE                           { $$ = PG_OBJECT_TABLE_MACRO; }

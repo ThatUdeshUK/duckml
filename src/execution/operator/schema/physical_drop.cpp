@@ -1,4 +1,7 @@
 #include "duckdb/execution/operator/schema/physical_drop.hpp"
+#include "duckdb/catalog/catalog_entry/embedding_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/database.hpp"
@@ -47,6 +50,27 @@ SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chu
 		SecretManager::Get(context.client)
 		    .DropSecretByName(context.client, info->name, info->if_not_found, extra_info.persist_mode,
 		                      extra_info.secret_storage);
+		break;
+	}
+	case CatalogType::EMBEDDING_ENTRY: {
+		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+
+		// Fetch the entry so we can recover the table name before dropping it.
+		EntryLookupInfo lookup(CatalogType::EMBEDDING_ENTRY, info->name);
+		auto entry_ptr = Catalog::GetEntry(context.client, info->catalog, info->schema, lookup, info->if_not_found);
+		if (entry_ptr) {
+			auto &embedding = entry_ptr->Cast<EmbeddingCatalogEntry>();
+			auto emb_data = embedding.GetData();
+
+			// Remove the vector column from the table (IF EXISTS so retries are safe).
+			AlterEntryData alter_data(info->catalog, info->schema, emb_data.table, OnEntryNotFound::RETURN_NULL);
+			RemoveColumnInfo remove_col(std::move(alter_data), info->name,
+			                           /*if_column_exists=*/true, /*cascade=*/info->cascade);
+			catalog.Alter(context.client, remove_col);
+
+			// Drop the embedding catalog entry.
+			catalog.DropEntry(context.client, *info);
+		}
 		break;
 	}
 	default: {
