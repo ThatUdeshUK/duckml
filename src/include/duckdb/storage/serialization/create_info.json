@@ -304,6 +304,51 @@
     ]
   },
   {
+    "class": "CreateEmbeddingInfo",
+    "base": "CreateInfo",
+    "enum": "EMBEDDING_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_embedding_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "embedding_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "column",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "model_catalog",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "model_schema",
+        "type": "string"
+      },
+      {
+        "id": 205,
+        "name": "model_name",
+        "type": "string"
+      },
+      {
+        "id": 206,
+        "name": "embedding_size",
+        "type": "int32_t"
+      }
+    ]
+  },
+  {
     "class": "CreateModelInfo",
     "base": "CreateInfo",
     "enum": "MODEL_ENTRY",

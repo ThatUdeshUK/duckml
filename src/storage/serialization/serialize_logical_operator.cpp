@@ -49,10 +49,16 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		result = LogicalCopyToFile::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CREATE_EMBEDDING:
+		result = LogicalCreate::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
 		result = LogicalCreateIndex::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+		result = LogicalCreate::Deserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_MODEL:
 		result = LogicalCreate::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:

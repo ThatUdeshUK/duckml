@@ -929,6 +929,8 @@
     "base": "LogicalOperator",
     "enum": [
       "LOGICAL_CREATE_SEQUENCE",
+      "LOGICAL_CREATE_MODEL",
+      "LOGICAL_CREATE_EMBEDDING",
       "LOGICAL_CREATE_VIEW",
       "LOGICAL_CREATE_SCHEMA",
       "LOGICAL_CREATE_MACRO",

@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/embedding_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/model_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -83,6 +84,13 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 		});
 
 		schema.Scan(CatalogType::MODEL_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			entries.push_back(entry);
+		});
+
+		schema.Scan(CatalogType::EMBEDDING_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -325,6 +333,11 @@ void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
 		WriteModel(seq, serializer);
 		break;
 	}
+	case CatalogType::EMBEDDING_ENTRY: {
+		auto &embedding = entry.Cast<EmbeddingCatalogEntry>();
+		WriteEmbedding(embedding, serializer);
+		break;
+	}
 	case CatalogType::TABLE_ENTRY: {
 		auto &table = entry.Cast<TableCatalogEntry>();
 		WriteTable(table, serializer);
@@ -381,6 +394,10 @@ void CheckpointReader::ReadEntry(CatalogTransaction transaction, Deserializer &d
 	}
 	case CatalogType::MODEL_ENTRY: {
 		ReadModel(transaction, deserializer);
+		break;
+	}
+	case CatalogType::EMBEDDING_ENTRY: {
+		ReadEmbedding(transaction, deserializer);
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
@@ -455,6 +472,19 @@ void CheckpointReader::ReadModel(CatalogTransaction transaction, Deserializer &d
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "model");
 	auto &model_info = info->Cast<CreateModelInfo>();
 	catalog.CreateModel(transaction, model_info);
+}
+
+//===--------------------------------------------------------------------===//
+// Embeddings
+//===--------------------------------------------------------------------===//
+void CheckpointWriter::WriteEmbedding(EmbeddingCatalogEntry &embedding, Serializer &serializer) {
+	serializer.WriteProperty(100, "embedding", &embedding);
+}
+
+void CheckpointReader::ReadEmbedding(CatalogTransaction transaction, Deserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "embedding");
+	auto &embedding_info = info->Cast<CreateEmbeddingInfo>();
+	catalog.CreateEmbedding(transaction, embedding_info);
 }
 
 //===--------------------------------------------------------------------===//

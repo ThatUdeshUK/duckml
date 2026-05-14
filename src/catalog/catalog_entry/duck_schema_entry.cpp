@@ -424,6 +424,7 @@ void DuckSchemaEntry::Verify(Catalog &catalog) {
 	functions.Verify(catalog);
 	sequences.Verify(catalog);
 	models.Verify(catalog);
+	embeddings.Verify(catalog);
 	collations.Verify(catalog);
 	types.Verify(catalog);
 }

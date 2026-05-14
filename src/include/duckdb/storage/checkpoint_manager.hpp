@@ -20,6 +20,7 @@ class MetadataReader;
 class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class ModelCatalogEntry;
+class EmbeddingCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TypeCatalogEntry;
@@ -46,6 +47,7 @@ protected:
 	virtual void WriteView(ViewCatalogEntry &table, Serializer &serializer);
 	virtual void WriteSequence(SequenceCatalogEntry &table, Serializer &serializer);
 	virtual void WriteModel(ModelCatalogEntry &table, Serializer &serializer);
+	virtual void WriteEmbedding(EmbeddingCatalogEntry &embedding, Serializer &serializer);
 	virtual void WriteMacro(ScalarMacroCatalogEntry &table, Serializer &serializer);
 	virtual void WriteTableMacro(TableMacroCatalogEntry &table, Serializer &serializer);
 	virtual void WriteIndex(IndexCatalogEntry &index_catalog_entry, Serializer &serializer);
@@ -70,6 +72,7 @@ protected:
 	virtual void ReadView(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadSequence(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadModel(CatalogTransaction transaction, Deserializer &deserializer);
+	virtual void ReadEmbedding(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadMacro(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadTableMacro(CatalogTransaction transaction, Deserializer &deserializer);
 	virtual void ReadIndex(CatalogTransaction transaction, Deserializer &deserializer);
