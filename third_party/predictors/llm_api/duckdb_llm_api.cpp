@@ -60,7 +60,7 @@ void LlmApiPredictor::Config(const ClientContext &context, const case_insensitiv
 	                                : "";
 	this->cluster_threshold = options.find("cluster_threshold") != options.end()
 	                              ? static_cast<float>(DoubleValue::Get(options.at("cluster_threshold")))
-	                              : 0.95f;
+	                              : 0.7f;
 	this->n_predict = 64;
 }
 
@@ -541,12 +541,13 @@ static float cosine_similarity(const std::vector<float> &a, const std::vector<fl
 // Calls the embeddings endpoint for 'texts' and returns one float vector per entry.
 // Returns an empty vector when cluster_embed_model is unset or the call fails.
 std::vector<std::vector<float>> LlmApiPredictor::EmbedTexts(const std::vector<std::string> &texts) const {
-	if (cluster_embed_model.empty() || texts.empty()) {
+	if (texts.empty()) {
 		return {};
 	}
 
 	nlohmann::json request;
-	request["model"] = cluster_embed_model;
+	request["model"] = "text-embedding-3-small";
+	request["dimensions"] = 256;
 	request["input"] = texts;
 
 	const auto response = api->post("embeddings", request);

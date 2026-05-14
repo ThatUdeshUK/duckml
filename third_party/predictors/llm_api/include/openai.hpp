@@ -23,6 +23,7 @@
 #ifndef OPENAI_HPP_
 #define OPENAI_HPP_
 
+#define OPENAI_VERBOSE_OUTPUT 0
 #if OPENAI_VERBOSE_OUTPUT
 #pragma message("OPENAI_VERBOSE_OUTPUT is ON")
 #endif
@@ -44,7 +45,7 @@ namespace duckdb {
 using Json = nlohmann::json;
 
 // OpenAI
-class OpenAI {
+class OpenAI { 
 	HTTPSUtil http_util_ = HTTPSUtil();
 	HTTPHeaders headers_;
 	std::unique_ptr<HTTPParams> params_;
