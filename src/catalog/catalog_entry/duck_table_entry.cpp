@@ -369,8 +369,15 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	create_info->columns.AddColumn(std::move(col));
 
+	auto bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
+
+	// Bind only the new column's default — existing columns' defaults are already
+	// evaluated in storage and must not be re-bound here (which would fail during
+	// WAL replay when the default catalog is not yet configured).
+	ColumnList new_col_only;
+	new_col_only.AddColumn(info.new_column.Copy());
 	vector<unique_ptr<Expression>> bound_defaults;
-	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
+	binder->BindDefaultValues(new_col_only, bound_defaults, schema.ParentCatalog().GetName(), schema.name);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
@@ -674,7 +681,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	UpdateConstraintsOnColumnDrop(removed_index, adjusted_indices, info, *create_info, bound_constraints,
 	                              dropped_column_is_generated);
 
-	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	auto bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
 	if (columns.GetColumn(LogicalIndex(removed_index)).Generated()) {
 		return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 	}

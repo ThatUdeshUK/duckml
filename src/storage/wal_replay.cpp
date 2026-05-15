@@ -15,6 +15,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
@@ -280,6 +281,12 @@ unique_ptr<WriteAheadLog> WriteAheadLog::Replay(FileSystem &fs, AttachedDatabase
 	return make_uniq<WriteAheadLog>(db, wal_path);
 }
 unique_ptr<WriteAheadLog> WriteAheadLog::ReplayInternal(AttachedDatabase &database, unique_ptr<FileHandle> handle) {
+	// FinalizeAttach (which sets default_database) runs after storage initialisation, so the
+	// default database name is not yet registered when WAL replay fires.  Set it here so that
+	// catalog lookups that resolve INVALID_CATALOG (e.g. column defaults like
+	// get_current_timestamp()) work correctly during replay.
+	DatabaseManager::Get(database).SetDefaultIfEmpty(database.GetName());
+
 	Connection con(database.GetDatabase());
 	auto wal_path = handle->GetPath();
 	BufferedFileReader reader(FileSystem::Get(database), std::move(handle));

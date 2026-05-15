@@ -101,6 +101,11 @@ public:
 	bool HasDefaultDatabase() {
 		return !default_database.empty();
 	}
+	void SetDefaultIfEmpty(const string &name) {
+		if (default_database.empty()) {
+			default_database = name;
+		}
+	}
 	//! Gets a list of all attached database paths
 	vector<string> GetAttachedDatabasePaths();
 
