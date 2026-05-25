@@ -47,15 +47,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 		// request["temperature"] = 0.5;
 		request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 		                       {{"content", rewritten}, {"role", "user"}}};
-#if IS_SCHEMA
-		std::stringstream sch;
-		sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-		sch << "\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"output_array\"],";
-		sch << "\"strict\":false,\"properties\":{\"output_array\":{\"type\":\"array\",\"minItems\":" << num_rows;
-		sch << ",\"maxItems\":" << num_rows << ",\"items\":" << this->grammar << "}}}}}";
-		auto array_schema = PromptUtil::parse_json(sch.str());
-		request["response_format"] = array_schema;
-#endif
+		request["response_format"] = BuildArrayResponseFormat(num_rows);
 
 		auto req_ts = steady_clock::now();
 		auto completion = api.post("chat/completions", request);
@@ -75,15 +67,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictBatch(OpenAI &api, const ve
 			in_tokens += completion["usage"]["prompt_tokens"].get<int>();
 			out_tokens += completion["usage"]["completion_tokens"].get<int>();
 
-			bool content_found = false;
-			for (auto &msg : completion["choices"]) {
-				if (msg["message"]["content"].is_string()) {
-					llm_out = msg["message"]["content"].get<std::string>();
-					content_found = true;
-				}
-			}
-
-			if (content_found) {
+			llm_out = ExtractContent(completion);
+			if (!llm_out.empty()) {
 				LLM_LOG("Batch No: " + std::to_string(batch) + "\n" + llm_out + "||" + "\n");
 
 				result->outputs.push_back(llm_out);
@@ -187,21 +172,14 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 	idx_t in_tokens = 0;
 	idx_t out_tokens = 0;
 	int64_t total_time = 0;
-	std::string llm_out {};
 
-	std::string rewritten = this->prompt + ";\n" + input;
+	const std::string rewritten = this->prompt + ";\n" + input;
 
 	nlohmann::json request;
 	request["model"] = this->model_path;
 	request["messages"] = {{{"content", GenerateSystemMessage(false)}, {"role", "system"}},
 	                       {{"content", rewritten}, {"role", "user"}}};
-#if IS_SCHEMA
-	std::stringstream sch;
-	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-	sch << "\"schema\":" << this->grammar << "}}";
-	auto array_schema = PromptUtil::parse_json(sch.str());
-	request["response_format"] = array_schema;
-#endif
+	request["response_format"] = BuildSingleResponseFormat();
 
 	auto req_ts = steady_clock::now();
 	auto completion = api.post("chat/completions", request);
@@ -220,15 +198,8 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictOne(OpenAI &api, const stri
 	in_tokens += completion["usage"]["prompt_tokens"].get<int>();
 	out_tokens += completion["usage"]["completion_tokens"].get<int>();
 
-	bool content_found = false;
-	for (auto &msg : completion["choices"]) {
-		if (msg["message"]["content"].is_string()) {
-			llm_out = msg["message"]["content"].get<std::string>();
-			content_found = true;
-		}
-	}
-
-	if (content_found) {
+	const auto llm_out = ExtractContent(completion);
+	if (!llm_out.empty()) {
 		LLM_LOG("Row No: " + std::to_string(row) + "\n" + llm_out + "||\n");
 		result->outputs.push_back(llm_out);
 		result->tokens = tokens;
@@ -267,10 +238,7 @@ std::unique_ptr<BatchResult> LlmApiPredictor::PredictAgg(OpenAI &api, const stri
 	const auto req_te = steady_clock::now();
 	const auto req_time = duration_cast<std::chrono::seconds>(req_te - req_ts).count();
 
-	for (auto &msg : completion["choices"]) {
-		llm_out = msg["message"]["content"].get<std::string>();
-	}
-
+	llm_out = ExtractContent(completion);
 	LLM_LOG(llm_out + "||\n");
 	result->outputs.push_back(llm_out);
 

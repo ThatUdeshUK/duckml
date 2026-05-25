@@ -339,18 +339,10 @@ void LlmApiPredictor::ScanChunk(ClientContext &client, DataChunk &output, const 
 	request["model"] = this->model_path;
 	request["messages"] = {{{"content", GenerateSystemMessage(true)}, {"role", "system"}},
 	                       {{"content", rewritten}, {"role", "user"}}};
-#if IS_SCHEMA
-	std::stringstream sch;
-	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
-	sch << "\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"output_array\"],";
-	sch << "\"strict\":false,\"properties\":{\"output_array\":{\"type\":\"array\",\"items\":" << this->grammar << "}}}}}";
-	auto array_schema = PromptUtil::parse_json(sch.str());
-	request["response_format"] = array_schema;
-#endif
+	request["response_format"] = BuildArrayResponseFormat();
+
 	auto completion = api->post("chat/completions", request);
-	for (auto &msg : completion["choices"]) {
-		llm_out = msg["message"]["content"].get<std::string>();
-	}
+	llm_out = ExtractContent(completion);
 
 	const int tokens = completion["usage"]["total_tokens"].get<int>();
 	const int in_tokens = completion["usage"]["prompt_tokens"].get<int>();
@@ -460,24 +452,22 @@ void LlmApiPredictor::PredictJoin(ClientContext &client, DataChunk &input, DataC
 	if (completion.contains("error")) {
 		LLM_LOG("PredictJoin LLM error: " + completion["error"].get<std::string>() + "\n");
 	} else {
-		for (auto &choice : completion["choices"]) {
-			if (choice["message"]["content"].is_string()) {
-				const auto llm_out = choice["message"]["content"].get<std::string>();
-				LLM_LOG("PredictJoin response: " + llm_out + "\n");
-				try {
-					auto response = nlohmann::json::parse(PromptUtil::extract_json(llm_out));
-					if (response.contains("matching_pairs") && response["matching_pairs"].is_array()) {
-						for (auto &pair_entry : response["matching_pairs"]) {
-							const idx_t left_id = pair_entry["left_id"].get<idx_t>();
-							const idx_t right_id = pair_entry["right_id"].get<idx_t>();
-							if (left_id < left_unique.size() && right_id < right_unique.size()) {
-								matched_pairs.insert({left_id, right_id});
-							}
+		const auto llm_out = ExtractContent(completion);
+		if (!llm_out.empty()) {
+			LLM_LOG("PredictJoin response: " + llm_out + "\n");
+			try {
+				auto response = nlohmann::json::parse(PromptUtil::extract_json(llm_out));
+				if (response.contains("matching_pairs") && response["matching_pairs"].is_array()) {
+					for (auto &pair_entry : response["matching_pairs"]) {
+						const idx_t left_id = pair_entry["left_id"].get<idx_t>();
+						const idx_t right_id = pair_entry["right_id"].get<idx_t>();
+						if (left_id < left_unique.size() && right_id < right_unique.size()) {
+							matched_pairs.insert({left_id, right_id});
 						}
 					}
-				} catch (const std::exception &e) {
-					LLM_LOG("PredictJoin parse error: " + std::string(e.what()) + "\n");
 				}
+			} catch (const std::exception &e) {
+				LLM_LOG("PredictJoin parse error: " + std::string(e.what()) + "\n");
 			}
 		}
 	}

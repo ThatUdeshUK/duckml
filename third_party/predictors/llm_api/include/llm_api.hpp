@@ -13,6 +13,13 @@
 
 namespace duckdb {
 
+// A group of semantically similar rows (by cosine similarity of their input-column embeddings).
+// rows[0] is the representative sent to the LLM; its result is propagated to all other members.
+struct TupleCluster {
+	std::string key;    // embed_prompt string of the representative row (used for LLM prompt + cache)
+	vector<idx_t> rows; // rows[0] is the representative
+};
+
 struct BatchResult {
 	size_t tokens;
 	size_t in_tokens;
@@ -54,20 +61,25 @@ public:
 	void PredictChunk(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
 	                  const PredictInfo &info, unique_ptr<PredictStats> &stats) override;
 	vector<string> PredictString(ClientContext &client, vector<string> &input, const PredictInfo &info) override;
+	void PredictJoin(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
+					 const idx_t n_left_cols, const PredictInfo &info, unique_ptr<PredictStats> &stats) override;
 	void ScanChunk(ClientContext &client, DataChunk &output, const PredictInfo &info,
 	               unique_ptr<PredictStats> &stats) override;
+
 	std::unique_ptr<BatchResult> PredictBatch(OpenAI &api, const vector<string> &input, const idx_t rows, idx_t batch,
 	                                          idx_t batch_size);
 	std::unique_ptr<BatchResult> PredictEmbedBatch(OpenAI &api, const vector<string> &input, const idx_t rows,
 	                                               idx_t batch, idx_t batch_size);
 	std::unique_ptr<BatchResult> PredictOne(OpenAI &api, const string &input, idx_t row);
 	std::unique_ptr<BatchResult> PredictAgg(OpenAI &api, const string &input);
+
 	vector<string> ApplyOrderStrat(vector<string> &rows, vector<idx_t> &orig_order) const;
-	void PredictJoin(ClientContext &client, DataChunk &input, DataChunk &output, const idx_t rows,
-	                 const idx_t n_left_cols, const PredictInfo &info, unique_ptr<PredictStats> &stats) override;
 
 private:
 	void GenerateGrammar();
 	std::string GenerateSystemMessage(bool is_array) const;
+	nlohmann::json BuildSingleResponseFormat() const;
+	nlohmann::json BuildArrayResponseFormat(idx_t n_rows = 0) const;
+	static std::string ExtractContent(const nlohmann::json &completion);
 };
 } // namespace duckdb

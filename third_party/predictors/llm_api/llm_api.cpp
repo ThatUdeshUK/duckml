@@ -55,4 +55,18 @@ void LlmApiPredictor::Load(ClientContext &client, const std::string &path, uniqu
 #endif
 }
 
+// Returns the text content of the first choice in a chat/completions response,
+// or an empty string when no valid content is found.
+std::string LlmApiPredictor::ExtractContent(const nlohmann::json &completion) {
+	if (!completion.contains("choices")) {
+		return {};
+	}
+	for (const auto &msg : completion["choices"]) {
+		if (msg.contains("message") && msg["message"]["content"].is_string()) {
+			return msg["message"]["content"].get<std::string>();
+		}
+	}
+	return {};
+}
+
 } // namespace duckdb

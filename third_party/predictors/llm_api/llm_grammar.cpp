@@ -85,4 +85,32 @@ std::string LlmApiPredictor::GenerateSystemMessage(const bool is_array) const {
 	       this->grammar + suffix;
 }
 
+nlohmann::json LlmApiPredictor::BuildSingleResponseFormat() const {
+#if IS_SCHEMA
+	std::stringstream sch;
+	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
+	sch << "\"schema\":" << this->grammar << "}}";
+	return PromptUtil::parse_json(sch.str());
+#else
+	return {};
+#endif
+}
+
+// When n_rows > 0, adds minItems/maxItems constraints to the array schema.
+nlohmann::json LlmApiPredictor::BuildArrayResponseFormat(const idx_t n_rows) const {
+#if IS_SCHEMA
+	std::stringstream sch;
+	sch << "{\"type\":\"json_schema\",\"json_schema\":{\"name\":\"json_response\",\"strict\":true,";
+	sch << "\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"required\":[\"output_array\"],";
+	sch << "\"strict\":false,\"properties\":{\"output_array\":{\"type\":\"array\"";
+	if (n_rows > 0) {
+		sch << ",\"minItems\":" << n_rows << ",\"maxItems\":" << n_rows;
+	}
+	sch << ",\"items\":" << this->grammar << "}}}}}";
+	return PromptUtil::parse_json(sch.str());
+#else
+	return {};
+#endif
+}
+
 } // namespace duckdb
