@@ -86,6 +86,7 @@ private:
 	nlohmann::json BuildSingleResponseFormat() const;
 	nlohmann::json BuildArrayResponseFormat(idx_t n_rows = 0) const;
 
+	std::vector<std::vector<float>> EmbedTexts(const std::vector<std::string> &texts) const;
 	static std::string ExtractContent(const nlohmann::json &completion);
 	// Propagate one LLM output to every row in its cluster (or to the row directly).
 	// Encapsulates the #if LLM_USE_CLUSTER branching that is otherwise duplicated in

@@ -4,6 +4,7 @@
 
 #include "llm_api.hpp"
 #include "llm_common.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <math.h>
 
@@ -48,47 +49,115 @@ void LlmApiPredictor::PropagateSingleResult(const std::string &llm_out, const id
 
 // Calls the embeddings endpoint for 'texts' and returns one float vector per entry.
 // Returns an empty vector when cluster_embed_model is unset or the call fails.
-std::vector<std::vector<float>> EmbedTexts(const std::vector<std::string> &texts) {
+std::vector<std::vector<float>> LlmApiPredictor::EmbedTexts(const std::vector<std::string> &texts) const {
+	if (texts.empty()) {
+		return {};
+	}
+
+	nlohmann::json request;
+	request["model"] = "text-embedding-3-small";
+	request["dimensions"] = 256;
+	request["input"] = texts;
+
+	const auto response = api->post("embeddings", request);
+	if (!response.contains("data") || !response["data"].is_array()) {
+		LLM_LOG("EmbedTexts: embeddings call failed or returned no data\n");
+		return {};
+	}
+
 	std::vector<std::vector<float>> embeddings;
-	embeddings.reserve(texts.size());
-	// TODO: Implement the actual embedding logic
+	embeddings.reserve(response["data"].size());
+	for (const auto &entry : response["data"]) {
+		if (entry.contains("embedding") && entry["embedding"].is_array()) {
+			embeddings.push_back(entry["embedding"].get<std::vector<float>>());
+		}
+	}
 	return embeddings;
 }
 
 // Groups rows in 'input' by semantic similarity of their info.input_set_names column values.
 //
-// When cluster_embed_model is set, each row's input columns are concatenated into a plain-text
-// string and sent to the embeddings API.  Rows are then assigned to clusters via greedy
-// cosine-similarity search: a row joins the nearest existing cluster whose representative
-// embedding exceeds cluster_threshold; otherwise a new cluster is started.
-//
-// When cluster_embed_model is empty the function falls back to exact string matching (no API
-// call).  In both cases clusters[i].key holds the embed_prompt string of the representative
-// row and is used for the downstream LLM prompt and cache lookup.
+// When a pre-computed embedding column is available (via info.embedding_column_map), the
+// stored embedding vectors are read directly from 'input' — no API call is made.
+// Otherwise the function falls back to EmbedTexts, and if that also yields nothing, to exact
+// string matching.  In all cases clusters[i].key holds the embed_prompt string of the
+// representative row and is used for the downstream LLM prompt and cache lookup.
 std::vector<TupleCluster> LlmApiPredictor::GroupByClusters(const DataChunk &input, const idx_t rows,
                                                            const PredictInfo &info) const {
-	// Build per-row text (for embedding) and formatted key (for LLM prompt + cache).
-	float cluster_threshold = 0.7f;
-	std::vector<std::string> texts;
+	float cluster_threshold = 0.5f;
 	std::vector<std::string> prompt_keys;
-	texts.reserve(rows);
 	prompt_keys.reserve(rows);
-
 	for (idx_t i = 0; i < rows; ++i) {
-		// Plain concatenation of column values used as embedding input.
-		std::stringstream ss;
-		for (idx_t j = 0; j < info.input_mask.size(); ++j) {
-			if (j > 0) {
-				ss << ' ';
-			}
-			ss << input.GetValue(info.input_mask[j], i).ToSQLString();
-		}
-		texts.push_back(ss.str());
 		prompt_keys.push_back(PromptUtil::embed_prompt(i, input, info, /*is_multi=*/true));
 	}
 
-	// Try to get vector embeddings; fall through to exact match on failure.
-	const auto embeddings = EmbedTexts(texts);
+	// --- Attempt 1: read pre-computed embeddings from the input chunk ---
+	std::vector<std::vector<float>> embeddings;
+
+	if (!info.embedding_column_map.empty()) {
+		// embedding_column_map: source-col-name → embedding-col-name.
+		// The binder appends the embedding column to input_set_names, so its index lives in
+		// input_mask at the same position.  Find the first available entry.
+		idx_t emb_col_idx = DConstants::INVALID_INDEX;
+		for (const auto &[src_col, emb_col_name] : info.embedding_column_map) {
+			for (idx_t j = 0; j < info.input_set_names.size(); ++j) {
+				if (StringUtil::CIEquals(info.input_set_names[j], emb_col_name)) {
+					emb_col_idx = info.input_mask[j];
+					break;
+				}
+			}
+			if (emb_col_idx != DConstants::INVALID_INDEX) {
+				break;
+			}
+		}
+
+		if (emb_col_idx != DConstants::INVALID_INDEX && emb_col_idx < input.ColumnCount()) {
+			// Need a mutable reference for Flatten; we do not modify logical content.
+			Vector &arr_col = const_cast<Vector &>(input.data[emb_col_idx]);
+			if (arr_col.GetType().id() == LogicalTypeId::ARRAY) {
+				// Flatten into a local copy so FlatVector accessors are safe.
+				Vector flat(arr_col.GetType());
+				flat.Reference(arr_col);
+				if (flat.GetVectorType() != VectorType::FLAT_VECTOR) {
+					flat.Flatten(rows);
+				}
+
+				const auto array_size = ArrayType::GetSize(flat.GetType());
+				const Vector &child_vec = ArrayVector::GetEntry(flat);
+				const float *child_data = FlatVector::GetData<float>(const_cast<Vector &>(child_vec));
+				const auto &validity = FlatVector::Validity(flat);
+
+				embeddings.reserve(rows);
+				for (idx_t i = 0; i < rows; ++i) {
+					if (validity.RowIsValid(i)) {
+						embeddings.emplace_back(child_data + i * array_size,
+						                        child_data + (i + 1) * array_size);
+					} else {
+						embeddings.emplace_back(); // NULL → cosine_similarity returns 0 → new cluster
+					}
+				}
+				LLM_LOG("GroupByClusters: using pre-computed embeddings from input column\n");
+			}
+		}
+	}
+
+	// --- Attempt 2: call EmbedTexts API if no pre-computed embeddings ---
+	if (embeddings.size() != rows) {
+		std::vector<std::string> texts;
+		texts.reserve(rows);
+		for (idx_t i = 0; i < rows; ++i) {
+			std::stringstream ss;
+			for (idx_t j = 0; j < info.input_mask.size(); ++j) {
+				if (j > 0) {
+					ss << ' ';
+				}
+				ss << input.GetValue(info.input_mask[j], i).ToSQLString();
+			}
+			texts.push_back(ss.str());
+		}
+		embeddings = EmbedTexts(texts);
+	}
+
 	const bool use_embeddings = (embeddings.size() == rows);
 
 	if (use_embeddings) {
