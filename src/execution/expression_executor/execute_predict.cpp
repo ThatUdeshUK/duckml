@@ -7,7 +7,7 @@
 #endif
 
 #if defined(ENABLE_PREDICT) && defined(ENABLE_LLM_API)
-#include "duckdb_llm_api.hpp"
+#include "llm_api.hpp"
 #endif
 
 namespace duckdb {

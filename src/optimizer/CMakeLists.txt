@@ -7,7 +7,6 @@ add_subdirectory(rule)
 add_subdirectory(statistics)
 
 if(ENABLE_LLM_API)
-  message(STATUS "Added LLM API include directories (optimizer)")
   include_directories(../../third_party/predictors/llm_api/include)
   include_directories(../../third_party/predictors/common)
 endif()

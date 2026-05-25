@@ -2,8 +2,7 @@
 
 #include <string>
 #include <memory>
-#include <map>
-#include <set>
+
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/operator/projection/physical_predict.hpp"
 #include "../../common/common.hpp"
