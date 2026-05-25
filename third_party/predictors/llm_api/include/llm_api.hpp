@@ -74,12 +74,24 @@ public:
 	std::unique_ptr<BatchResult> PredictAgg(OpenAI &api, const string &input);
 
 	vector<string> ApplyOrderStrat(vector<string> &rows, vector<idx_t> &orig_order) const;
+	// Groups rows in 'input' by semantic similarity of their info.input_set_names column values.
+	// Uses the embeddings API (cluster_embed_model) when configured; falls back to exact match.
+	// clusters[i].rows[0] is the representative whose LLM result is propagated to all members.
+	std::vector<TupleCluster> GroupByClusters(const DataChunk &input, idx_t rows, const PredictInfo &info) const;
 
 private:
 	void GenerateGrammar();
 	std::string GenerateSystemMessage(bool is_array) const;
+
 	nlohmann::json BuildSingleResponseFormat() const;
 	nlohmann::json BuildArrayResponseFormat(idx_t n_rows = 0) const;
+
 	static std::string ExtractContent(const nlohmann::json &completion);
+	// Propagate one LLM output to every row in its cluster (or to the row directly).
+	// Encapsulates the #if LLM_USE_CLUSTER branching that is otherwise duplicated in
+	// the main processing loop and the batch-failure retry loop of PredictChunk.
+	void PropagateSingleResult(const std::string &llm_out, idx_t unprocessed_idx,
+							   map<string, vector<idx_t>> &tuple_id_map,
+							   DataChunk &output, const PredictInfo &info);
 };
 } // namespace duckdb

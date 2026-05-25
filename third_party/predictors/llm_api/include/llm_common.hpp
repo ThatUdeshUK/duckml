@@ -1,6 +1,7 @@
 #pragma once
 
 #define LLM_USE_THREADS 1
+#define LLM_USE_CLUSTER 1
 #define IS_SCHEMA 1
 
 #ifdef NDEBUG
