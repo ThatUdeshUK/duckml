@@ -50,6 +50,7 @@ class MetadataManager;
 class RowVersionManager;
 class ScanFilterInfo;
 class StorageCommitState;
+struct ColumnFillCallback;
 
 struct RowGroupWriteInfo {
 	RowGroupWriteInfo(PartialBlockManager &manager, const vector<CompressionType> &compression_types,
@@ -107,6 +108,8 @@ public:
 	                               DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
 	                               ExpressionExecutor &executor, Vector &intermediate);
+	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
+	                               ColumnFillCallback &fill_callback, DataChunk &fill_chunk);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	void CommitDrop();

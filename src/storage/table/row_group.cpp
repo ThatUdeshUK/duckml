@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 
+#include "duckdb/common/column_fill_callback.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
@@ -377,6 +378,34 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 	// now add the new column
 	row_group->columns.push_back(std::move(added_column));
 
+	row_group->Verify();
+	return row_group;
+}
+
+unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
+                                         ColumnFillCallback &fill_callback, DataChunk &fill_chunk) {
+	Verify();
+
+	auto added_column =
+	    ColumnData::CreateColumn(GetBlockManager(), GetTableInfo(), GetColumnCount(), start, new_column.Type());
+
+	idx_t rows_to_write = this->count;
+	if (rows_to_write > 0) {
+		ColumnAppendState state;
+		added_column->InitializeAppend(state);
+		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
+			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
+			fill_chunk.Reset();
+			fill_chunk.SetCardinality(rows_in_this_vector);
+			fill_callback.Fill(fill_chunk.data[0], rows_in_this_vector);
+			added_column->Append(state, fill_chunk.data[0], rows_in_this_vector);
+		}
+	}
+
+	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
+	row_group->SetVersionInfo(GetOrCreateVersionInfoPtr());
+	row_group->columns = GetColumns();
+	row_group->columns.push_back(std::move(added_column));
 	row_group->Verify();
 	return row_group;
 }

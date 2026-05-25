@@ -1,6 +1,7 @@
 #include "duckdb/storage/data_table.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/column_fill_callback.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
@@ -92,6 +93,30 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	local_storage.AddColumn(parent, *this, new_column, default_executor);
 
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
+	parent.version = DataTableVersion::ALTERED;
+}
+
+DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column,
+                     ColumnFillCallback &fill_callback)
+    : db(parent.db), info(parent.info), version(DataTableVersion::MAIN_TABLE) {
+	for (auto &column_def : parent.column_definitions) {
+		column_definitions.emplace_back(column_def.Copy());
+	}
+	column_definitions.emplace_back(new_column.Copy());
+
+	auto &local_storage = LocalStorage::Get(context, db);
+
+	lock_guard<mutex> parent_lock(parent.append_lock);
+
+	this->row_groups = parent.row_groups->AddColumn(context, new_column, fill_callback);
+
+	// For local storage: use a NULL default (local storage is empty in practice for CREATE EMBEDDING,
+	// since the table existed before the current transaction started).
+	BoundConstantExpression null_default(Value(new_column.Type()));
+	ExpressionExecutor null_executor(context);
+	null_executor.AddExpression(null_default);
+	local_storage.AddColumn(parent, *this, new_column, null_executor);
+
 	parent.version = DataTableVersion::ALTERED;
 }
 

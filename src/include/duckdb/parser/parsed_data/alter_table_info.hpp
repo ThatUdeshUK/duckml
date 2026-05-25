@@ -16,6 +16,9 @@
 
 namespace duckdb {
 
+// Forward declaration — full definition in duckdb/common/column_fill_callback.hpp
+struct ColumnFillCallback;
+
 enum class AlterForeignKeyType : uint8_t { AFT_ADD = 0, AFT_DELETE = 1 };
 
 //===--------------------------------------------------------------------===//
@@ -185,6 +188,9 @@ struct AddColumnInfo : public AlterTableInfo {
 	ColumnDefinition new_column;
 	//! Whether or not an error should be thrown if the column exist
 	bool if_column_not_exists;
+	//! Optional: if set, called to fill the new column instead of evaluating the DEFAULT expression.
+	//! Not serialized — only valid for in-process use (e.g. CREATE EMBEDDING).
+	unique_ptr<ColumnFillCallback> fill_callback;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

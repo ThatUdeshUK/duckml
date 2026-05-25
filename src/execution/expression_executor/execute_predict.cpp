@@ -30,22 +30,13 @@ public:
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundPredictExpression &expr,
                                                                 ExpressionExecutorState &state) {
 	auto result = make_uniq<ExecutePredictState>(expr, state);
+	result->predict_info = PredictInfo(*expr.bound_predict);
 	idx_t mask_i = 0;
 	for (auto &child : expr.children) {
 		result->AddChild(*child);
 		result->predict_info.input_mask.push_back(mask_i);
 		mask_i++;
 	}
-
-	result->predict_info.model_type = expr.bound_predict->model_type;
-	result->predict_info.model_path = expr.bound_predict->model_path;
-	result->predict_info.prompt = expr.bound_predict->prompt;
-	result->predict_info.base_api = expr.bound_predict->base_api;
-	result->predict_info.secret = expr.bound_predict->secret;
-	result->predict_info.result_set_names = expr.bound_predict->result_set_names;
-	result->predict_info.input_set_names = expr.bound_predict->input_set_names;
-	result->predict_info.result_set_types = expr.bound_predict->result_set_types;
-	result->predict_info.options = expr.bound_predict->options;
 
 	auto predictor = PhysicalPredict::InitPredictor(result->predict_info, result->predict_info.secret);
 	predictor->task = PREDICT_LLM_TASK;

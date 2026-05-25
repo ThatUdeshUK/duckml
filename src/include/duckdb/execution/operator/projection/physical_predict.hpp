@@ -40,6 +40,9 @@ struct PredictStats {
 };
 
 struct PredictInfo {
+	PredictInfo() = default;
+	explicit PredictInfo(BoundPredictInfo bound);
+
 	ModelType model_type;
 	string model_name;
 	string model_path;
@@ -52,6 +55,7 @@ struct PredictInfo {
 	vector<string> result_set_names;
 	vector<LogicalType> result_set_types;
 	case_insensitive_map_t<Value> options;
+	case_insensitive_map_t<string> embedding_column_map;
 };
 
 class Predictor {

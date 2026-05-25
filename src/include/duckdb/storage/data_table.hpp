@@ -41,6 +41,7 @@ class TableScanState;
 struct TableDeleteState;
 struct ConstraintState;
 struct TableUpdateState;
+struct ColumnFillCallback;
 enum class VerifyExistenceType : uint8_t;
 
 enum class DataTableVersion {
@@ -58,6 +59,8 @@ public:
 	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value);
+	//! Constructs a DataTable as a delta on an existing data table with a newly added column, filling it via callback
+	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, ColumnFillCallback &fill_callback);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type

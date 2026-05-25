@@ -38,16 +38,7 @@ struct LlmAggFunction {
 	                     idx_t /*offset*/) {
 		const auto &llm_bind = aggr_input_data.bind_data->Cast<LlmAggBindData>();
 
-		PredictInfo predict_info {};
-		predict_info.model_type = llm_bind.info->model_type;
-		predict_info.model_path = llm_bind.info->model_path;
-		predict_info.prompt = llm_bind.info->prompt;
-		predict_info.base_api = llm_bind.info->base_api;
-		predict_info.secret = llm_bind.info->secret;
-		predict_info.result_set_names = llm_bind.info->result_set_names;
-		predict_info.input_set_names = llm_bind.info->input_set_names;
-		predict_info.result_set_types = llm_bind.info->result_set_types;
-		predict_info.options = llm_bind.info->options;
+		PredictInfo predict_info(*llm_bind.info);
 
 		const auto predictor = InitializePredictor(llm_bind.context, predict_info, llm_bind.api_key);
 

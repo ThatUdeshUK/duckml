@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/common/column_fill_callback.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 
 #include "duckdb/parser/constraint.hpp"

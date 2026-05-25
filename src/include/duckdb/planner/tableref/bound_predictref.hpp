@@ -41,6 +41,8 @@ struct BoundPredictInfo {
 	vector<LogicalType> result_set_types;
 	//! Options
 	case_insensitive_map_t<Value> options;
+	//! Mapping from original input column name to its precomputed embedding column name
+	case_insensitive_map_t<string> embedding_column_map;
 
 	bool Equals(const BoundPredictInfo &other) const {
 		return model_type == other.model_type && model_name == other.model_name &&

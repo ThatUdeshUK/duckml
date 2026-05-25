@@ -1,5 +1,6 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
+#include "duckdb/common/column_fill_callback.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/index_map.hpp"
@@ -371,14 +372,20 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 
 	auto bound_create_info = Binder::BindCreateTableCheckpoint(std::move(create_info), schema);
 
-	// Bind only the new column's default — existing columns' defaults are already
-	// evaluated in storage and must not be re-bound here (which would fail during
-	// WAL replay when the default catalog is not yet configured).
-	ColumnList new_col_only;
-	new_col_only.AddColumn(info.new_column.Copy());
-	vector<unique_ptr<Expression>> bound_defaults;
-	binder->BindDefaultValues(new_col_only, bound_defaults, schema.ParentCatalog().GetName(), schema.name);
-	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
+	shared_ptr<DataTable> new_storage;
+	if (info.fill_callback) {
+		// Pre-computed fill (e.g. CREATE EMBEDDING): bypass default expression and fill via callback.
+		new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *info.fill_callback);
+	} else {
+		// Bind only the new column's default — existing columns' defaults are already
+		// evaluated in storage and must not be re-bound here (which would fail during
+		// WAL replay when the default catalog is not yet configured).
+		ColumnList new_col_only;
+		new_col_only.AddColumn(info.new_column.Copy());
+		vector<unique_ptr<Expression>> bound_defaults;
+		binder->BindDefaultValues(new_col_only, bound_defaults, schema.ParentCatalog().GetName(), schema.name);
+		new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
+	}
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 

@@ -1,4 +1,6 @@
 #include "duckdb/parser/tableref/table_predict_ref.hpp"
+#include "duckdb/catalog/catalog_entry/embedding_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/prompt.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/tableref/bound_predictref.hpp"
@@ -75,6 +77,8 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	vector<string> names;
 	vector<LogicalType> input_types;
 	vector<LogicalType> types;
+	case_insensitive_map_t<string> emb_sub;
+
 	if (ref.source) {
 		result->child_binder = CreateBinder(context, this);
 		result->children.push_back(result->child_binder->Bind(*ref.source));
@@ -84,6 +88,23 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 
 		vector<idx_t> input_mask;
 		if (!stored_model_data.input_set_names.empty()) {
+			// Embedding column binding
+			auto all_schemas = Catalog::GetAllSchemas(context);
+			for (auto &schema_ref : all_schemas) {
+				schema_ref.get().Scan(context, CatalogType::EMBEDDING_ENTRY, [&](CatalogEntry &emb_catalog_entry) {
+					auto &emb_entry = emb_catalog_entry.Cast<EmbeddingCatalogEntry>();
+					auto emb_data = emb_entry.GetData();
+					emb_sub[emb_data.column] = emb_entry.name;
+				});
+			}
+			std::vector<std::string> current_cols(stored_model_data.input_set_names);
+			for (auto &col : current_cols) {
+				auto sub_it = emb_sub.find(col);
+				if (sub_it != emb_sub.end()) {
+					stored_model_data.input_set_names.push_back(sub_it->second);
+				}
+			}
+
 			case_insensitive_map_t<idx_t> name_map;
 			for (auto it = names.begin(); it != names.end(); ++it) {
 				auto index = static_cast<idx_t>(std::distance(names.begin(), it));
@@ -177,6 +198,7 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 	if (ref.source) {
 		bound_predict->input_set_names = std::move(stored_model_data.input_set_names);
 		bound_predict->input_set_types = std::move(input_types);
+		bound_predict->embedding_column_map = std::move(emb_sub);
 	}
 	bound_predict->types = types;
 	bound_predict->result_set_names = std::move(stored_model_data.out_names);

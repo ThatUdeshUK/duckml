@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 
+#include "duckdb/common/column_fill_callback.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -1395,6 +1396,30 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 		// merge in the statistics
 		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 
+		result->row_groups->AppendSegment(std::move(new_row_group));
+	}
+
+	return result;
+}
+
+shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
+                                                             ColumnFillCallback &fill_callback) {
+	idx_t new_column_idx = types.size();
+	auto new_types = types;
+	new_types.push_back(new_column.GetType());
+	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
+	                                                  total_rows.load(), row_group_size);
+
+	DataChunk fill_chunk;
+	fill_chunk.Initialize(Allocator::Get(context), {new_column.GetType()});
+
+	result->stats.InitializeAddColumn(stats, new_column.GetType());
+	auto lock = result->stats.GetLock();
+	auto &new_column_stats = result->stats.GetStats(*lock, new_column_idx);
+
+	for (auto &current_row_group : row_groups->Segments()) {
+		auto new_row_group = current_row_group.AddColumn(*result, new_column, fill_callback, fill_chunk);
+		new_row_group->MergeIntoStatistics(new_column_idx, new_column_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
 
