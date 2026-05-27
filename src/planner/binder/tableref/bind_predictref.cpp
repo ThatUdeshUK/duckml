@@ -89,19 +89,21 @@ unique_ptr<BoundTableRef> Binder::BindBoundPredict(TablePredictRef &ref) {
 		vector<idx_t> input_mask;
 		if (!stored_model_data.input_set_names.empty()) {
 			// Embedding column binding
+			case_insensitive_map_t<string> all_emb_sub;
 			auto all_schemas = Catalog::GetAllSchemas(context);
 			for (auto &schema_ref : all_schemas) {
 				schema_ref.get().Scan(context, CatalogType::EMBEDDING_ENTRY, [&](CatalogEntry &emb_catalog_entry) {
 					auto &emb_entry = emb_catalog_entry.Cast<EmbeddingCatalogEntry>();
 					auto emb_data = emb_entry.GetData();
-					emb_sub[emb_data.column] = emb_entry.name;
+					all_emb_sub[emb_data.column] = emb_entry.name;
 				});
 			}
 			std::vector<std::string> current_cols(stored_model_data.input_set_names);
 			for (auto &col : current_cols) {
-				auto sub_it = emb_sub.find(col);
-				if (sub_it != emb_sub.end()) {
+				auto sub_it = all_emb_sub.find(col);
+				if (sub_it != all_emb_sub.end()) {
 					stored_model_data.input_set_names.push_back(sub_it->second);
+					emb_sub[sub_it->first] = sub_it->second;
 				}
 			}
 

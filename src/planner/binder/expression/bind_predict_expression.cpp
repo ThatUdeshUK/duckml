@@ -1,4 +1,7 @@
 #include "duckdb/parser/expression/predict_expression.hpp"
+#include "duckdb/catalog/catalog_entry/embedding_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_predict_expression.hpp"
 #include "duckdb/planner/model_selection.hpp"
@@ -18,7 +21,28 @@ BindResult ExpressionBinder::BindPredict(PredictExpression &expr, idx_t depth) {
 	// bind the children of the function expression
 	ErrorData error;
 
-	// // bind of each child
+	// Scan the embedding catalog and append embedding column children for any input that has one
+	case_insensitive_map_t<string> all_emb_sub;
+	case_insensitive_map_t<string> emb_sub;
+	auto all_schemas = Catalog::GetAllSchemas(context);
+	for (auto &schema_ref : all_schemas) {
+		schema_ref.get().Scan(context, CatalogType::EMBEDDING_ENTRY, [&](CatalogEntry &emb_catalog_entry) {
+			auto &emb_entry = emb_catalog_entry.Cast<EmbeddingCatalogEntry>();
+			auto emb_data = emb_entry.GetData();
+			all_emb_sub[emb_data.column] = emb_entry.name;
+		});
+	}
+	std::vector<std::string> current_cols(expr.input_col_names);
+	for (auto &col : current_cols) {
+		auto sub_it = all_emb_sub.find(col);
+		if (sub_it != all_emb_sub.end()) {
+			expr.input_col_names.push_back(sub_it->second);
+			expr.children.push_back(make_uniq<ColumnRefExpression>(sub_it->second));
+			emb_sub[sub_it->first] = sub_it->second;
+		}
+	}
+
+	// bind of each child
 	for (idx_t i = 0; i < expr.children.size(); i++) {
 		BindChild(expr.children[i], depth, error);
 	}
@@ -68,7 +92,8 @@ BindResult ExpressionBinder::BindPredict(PredictExpression &expr, idx_t depth) {
 	result->bound_predict->model_path = stored_model_data.model_path;
 	result->bound_predict->base_api = stored_model_data.base_api;
 	result->bound_predict->options = stored_model_data.options;
-	
+	result->bound_predict->embedding_column_map = std::move(emb_sub);
+
 	if (!result) {
 		error.AddQueryLocation(expr);
 		error.Throw();

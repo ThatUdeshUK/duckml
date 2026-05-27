@@ -55,13 +55,14 @@ static void VerifyNullHandling(const BoundPredictExpression & /*expr*/, DataChun
 void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  const idx_t count, Vector &result) {
 	state->intermediate_chunk.Reset();
+	auto &pstate = state->Cast<ExecutePredictState>();
 	auto &arguments = state->intermediate_chunk;
 
 	DataChunk input;
 	input.InitializeEmpty(state->types); // schema
 	input.SetCardinality(count);
 
-	bool is_join = expr.children.size() == 2;
+	bool is_join = (expr.children.size() - pstate.predict_info.embedding_column_map.size()) > 1;
 	int first_child_cols = 1;
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {
@@ -73,7 +74,6 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 	arguments.SetCardinality(count);
 	arguments.Verify();
 
-	auto &pstate = state->Cast<ExecutePredictState>();
 	if (!pstate.is_loaded) {
 		pstate.predictor->Config(*context, pstate.predict_info.options);
 		pstate.predictor->Load(*context, pstate.predict_info.model_path, pstate.stats);

@@ -74,7 +74,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 
 	idx_t unprocessed_rows = unprocessed.size();
 	idx_t imp_batch_size = batch_size;
-	if (n_threads * batch_size > unprocessed_rows && unprocessed_rows > n_threads) {
+	if (n_threads * batch_size > unprocessed_rows && unprocessed_rows >= n_threads) {
 		imp_batch_size = unprocessed_rows / n_threads;
 		if (unprocessed_rows % n_threads > 0)
 			imp_batch_size++;
