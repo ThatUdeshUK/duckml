@@ -62,7 +62,8 @@ void ExpressionExecutor::Execute(const BoundPredictExpression &expr, ExpressionS
 	input.InitializeEmpty(state->types); // schema
 	input.SetCardinality(count);
 
-	bool is_join = (expr.children.size() - pstate.predict_info.embedding_column_map.size()) > 1;
+	bool is_join = (expr.children.size() - pstate.predict_info.embedding_column_map.size()) > 1 &&
+	               pstate.predict_info.result_set_types[0].id() == LogicalTypeId::BOOLEAN;
 	int first_child_cols = 1;
 	if (!state->types.empty()) {
 		for (idx_t i = 0; i < expr.children.size(); i++) {

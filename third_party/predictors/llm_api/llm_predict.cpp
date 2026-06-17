@@ -262,6 +262,7 @@ void LlmApiPredictor::PredictChunk(ClientContext &client, DataChunk &input, Data
 		}
 	}
 #endif
+	std::cout << ("Total calls: " + std::to_string(total_calls) + "\n");
 	std::cout << ("Total tokens: " + std::to_string(total_tokens) + "\n");
 	std::cout << ("Total input tokens: " + std::to_string(total_in_tokens) + "\n");
 	std::cout << ("Total output tokens: " + std::to_string(total_out_tokens) + "\n");
